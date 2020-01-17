@@ -1,0 +1,5 @@
+# Routes
+GET         /                                                  cloudpit.Controller.index
+
+# WebJars
+->          /webjars                                           webjars.Routes
