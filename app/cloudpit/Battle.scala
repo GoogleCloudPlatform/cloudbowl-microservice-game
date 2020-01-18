@@ -62,11 +62,10 @@ object Battle extends App {
     val updatedViewers = event match {
       case ViewerJoin(_) =>
         currentViewers + 1
+      case ViewerLeave(_) if currentViewers > 0 =>
+        currentViewers - 1
       case ViewerLeave(_) =>
-        if (currentViewers > 0)
-          currentViewers - 1
-        else
-          0
+        0
     }
 
     Viewers(viewers.viewerCount.updated(arena, updatedViewers))
