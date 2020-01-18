@@ -22,7 +22,8 @@ libraryDependencies ++= Seq(
 
   "org.webjars"            %% "webjars-play"                    % "2.8.0",
 
-  "org.apache.kafka"       %% "kafka-streams-scala"             % "2.4.0",
+  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.0",
+  "com.lihaoyi"            %% "upickle"                         % "0.9.5",
 
   "com.dimafeng"           %% "testcontainers-scala-postgresql" % "0.34.1",
   "com.dimafeng"           %% "testcontainers-scala-kafka"      % "0.34.3",
@@ -62,7 +63,7 @@ scalacOptions ++= Seq(
 
 pipelineStages := Seq(digest, gzip)
 
-WebKeys.webJars in Assets := Seq.empty[File]
+Assets / WebKeys.webJars := Seq.empty[File]
 
 Global / cancelable := false
 
@@ -71,12 +72,12 @@ organizationName := "Google LLC"
 startYear := Some(2019)
 licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")
 headerMappings += FileType("html") -> HeaderCommentStyle.twirlStyleBlockComment
-headerSources.in(Compile) ++= sources.in(Compile, TwirlKeys.compileTemplates).value
+Compile / headerSources ++= (Compile / TwirlKeys.compileTemplates / sources).value
 
 
 // Override logging in test
-testOptions in Test += Tests.Argument("-oDF")
+Test / testOptions += Tests.Argument("-oDF")
 
-fork in runMain := true
+run / fork := true
 
-connectInput in runMain := true
+run / connectInput := true

@@ -17,18 +17,18 @@
 package cloudpit.dev
 
 import java.io.{File, FileOutputStream}
+import java.net.URL
 import java.nio.file.Files
-import java.time.Duration
 import java.util.{Properties, UUID}
 
-import scala.collection.JavaConverters._
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
+import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.KafkaSerialization._
+import cloudpit.{Arena, Kafka, Player, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.streams.KafkaStreams
-import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.scala.kstream.Materialized
-import org.apache.kafka.streams.state.QueryableStoreTypes
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.Serializer
 
 import scala.io.StdIn
 
@@ -46,7 +46,7 @@ object KafkaApp extends App {
   Files.createDirectories(destination.getParentFile.toPath)
 
   val props = new Properties()
-  props.setProperty("bootstrap.servers", container.bootstrapServers)
+  props.setProperty("kafka.bootstrap.servers", container.bootstrapServers)
 
   val fos = new FileOutputStream(destination)
 
@@ -59,72 +59,49 @@ object KafkaApp extends App {
 }
 
 object KafkaConsumerApp extends App {
+  private implicit val actorSystem = ActorSystem()
 
-  val props = new Properties
-  val propsInputStream = getClass.getClassLoader.getResourceAsStream("application.properties")
-  props.load(propsInputStream)
-  props.setProperty("group.id", "test")
-  props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-  props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-  propsInputStream.close()
+  val playersSource = Kafka.source[Arena.Path, PlayerEvent](UUID.randomUUID().toString, Topics.players)
+  val viewersSource = Kafka.source[Arena.Path, ViewerEvent](UUID.randomUUID().toString, Topics.viewers)
 
-  val consumer = new KafkaConsumer[String, String](props)
-  consumer.subscribe(Seq("TextLinesTopic", "WordsWithCountsTopic").asJava)
-
-  while (true) {
-    val records = consumer.poll(Duration.ofMillis(100))
-    records.forEach { record =>
-      println(s"topic = ${record.topic}, offset = ${record.offset}, key = ${record.key}, value = ${record.value}")
-    }
-  }
-
+  playersSource.merge(viewersSource).runForeach(println)
 }
 
 object KafkaProducerApp extends App {
 
-  val props = new Properties
-  val propsInputStream = getClass.getClassLoader.getResourceAsStream("application.properties")
-  props.load(propsInputStream)
-  props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-  props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-  propsInputStream.close()
+  private implicit val actorSystem = ActorSystem()
 
-  val producer = new KafkaProducer[String, String](props)
+  Iterator.continually {
+    println("Command:")
+    StdIn.readLine()
+  } foreach { line =>
 
-  println("Send messages")
-  Iterator.continually(StdIn.readLine("> ")).takeWhile(_.nonEmpty).foreach { line =>
-    producer.send(new ProducerRecord[String, String]("TextLinesTopic", UUID.randomUUID().toString, line))
-  }
+    def player(path: String): Player = {
+      val service = new URL(s"http://localhost:9000/$path")
+      Player(service.toString, path, service)
+    }
 
-  println("closing time")
-  producer.close()
+    def send[E](topic: String, arena: Arena.Path, event: E)(implicit serializer: Serializer[E]) {
+      val record = new ProducerRecord(topic, arena, event)
+      println("sending" -> record)
+      Source.single(record).to(Kafka.sink[Arena.Path, E]).run()
+    }
 
-}
+    line.split("/") match {
+      case Array(arena, "playerjoin", path) =>
+        send(Topics.players, arena, PlayerJoin(Arena(arena), player(path)))
+      case Array(arena, "playerleave", path) =>
+        send(Topics.players, arena, PlayerLeave(Arena(arena), player(path)))
 
-object KafkaKtableApp extends App {
-  import org.apache.kafka.streams.scala.ImplicitConversions._
-  import org.apache.kafka.streams.scala.Serdes._
+      case Array(arena, "viewerjoin") =>
+        send(Topics.viewers, arena, ViewerJoin(Arena(arena)))
+      case Array(arena, "viewerleave") =>
+        send(Topics.viewers, arena, ViewerLeave(Arena(arena)))
 
-  val props = new Properties
-  val propsInputStream = getClass.getClassLoader.getResourceAsStream("application.properties")
-  props.load(propsInputStream)
-  props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-  props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-  propsInputStream.close()
+      case _ =>
+        println(s"Invalid command: $line")
+    }
 
-  val builder = new StreamsBuilder
-  val ktable = builder.table[String, Long]("WordsWithCountsTopic", Materialized.as[String, Long, ]("counts-store"))
-  val streams = new KafkaStreams(builder.build(), props)
-
-  sys.ShutdownHookThread {
-    streams.close()
-  }
-
-  streams.start()
-
-  while (true) {
-    val view = streams.store(ktable.queryableStoreName, QueryableStoreTypes.keyValueStore)
-    println(view)
   }
 
 }

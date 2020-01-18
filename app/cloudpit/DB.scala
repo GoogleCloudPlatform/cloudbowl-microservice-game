@@ -24,7 +24,7 @@ import javax.inject.{Inject, Singleton}
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 
 @Singleton
@@ -70,7 +70,6 @@ class DB @Inject()(lifecycle: ApplicationLifecycle, playConfig: Configuration)(i
 
 @Singleton
 class DAO @Inject()(db: DB)(implicit ec: ExecutionContext) {
-  import db.ctx._
 
 
 

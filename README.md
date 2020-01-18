@@ -12,3 +12,10 @@ Run Locally:
     ```
     ./sbt ~run
     ```
+
+```
+./sbt "runMain cloudpit.dev.KafkaApp"
+
+./sbt "runMain cloudpit.dev.KafkaConsumerApp"
+
+```

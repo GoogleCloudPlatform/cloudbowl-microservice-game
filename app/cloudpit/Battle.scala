@@ -16,38 +16,67 @@
 
 package cloudpit
 
-import java.util.Properties
+import java.util.UUID
 
-import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.scala.kstream.Materialized
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
+import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, Players, ViewerEvent, ViewerJoin, ViewerLeave, Viewers}
+import cloudpit.KafkaSerialization._
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 object Battle extends App {
-  import org.apache.kafka.streams.scala.Serdes._
 
-  val propsInputStream = getClass.getClassLoader.getResourceAsStream("application.properties")
-  val props = new Properties()
-  props.load(propsInputStream)
-  propsInputStream.close()
-  props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+  private implicit val actorSystem = ActorSystem()
 
-  val builder = new StreamsBuilder
-  val textLines = builder.stream[String, String]("TextLinesTopic")
-  val wordCounts = textLines
-    .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
-    .groupBy((_, word) => word)
-    .count()(Materialized.as("counts-store"))
+  // no consumer group partitioning
+  val groupId = UUID.randomUUID().toString
 
-  wordCounts.toStream.to("WordsWithCountsTopic")
+  val playerSource = Kafka.source[Arena.Path, PlayerEvent](groupId, Topics.players)
 
-  val streams = new KafkaStreams(builder.build(), props)
-  streams.start()
+  val viewerSource = Kafka.source[Arena.Path, ViewerEvent](groupId, Topics.viewers)
+
+  val arenaSink = Kafka.sink[Arena.Path, Arena]
 
 
-  sys.ShutdownHookThread {
-    streams.close()
+  val initViewers = Viewers(Map.empty)
+  val initPlayers = Players(Map.empty)
+
+  val playersSource = playerSource.scan(initPlayers) { case (players, record) =>
+    val arena = Arena(record.key())
+    val event = record.value()
+
+    val currentPlayers = players.players.getOrElse(arena, Set.empty)
+    val updatedPlayers = event match {
+      case PlayerJoin(_, player) =>
+        currentPlayers + player
+      case PlayerLeave(_, player) =>
+        currentPlayers - player
+    }
+
+    Players(players.players.updated(arena, updatedPlayers))
   }
+
+  val viewersSource = viewerSource.scan(initViewers) { case (viewers, record) =>
+    val arena = Arena(record.key())
+    val event = record.value()
+
+    val currentViewers = viewers.viewerCount.getOrElse(arena, 0)
+    val updatedViewers = event match {
+      case ViewerJoin(_) =>
+        currentViewers + 1
+      case ViewerLeave(_) =>
+        if (currentViewers > 0)
+          currentViewers - 1
+        else
+          0
+    }
+
+    Viewers(viewers.viewerCount.updated(arena, updatedViewers))
+  }
+
+  playersSource.zipLatest(viewersSource).runForeach(println)
 
   // get arena state
 
@@ -56,9 +85,6 @@ object Battle extends App {
 
 
   // get player state & subscribe
-
-
-
 
 
 }

@@ -17,7 +17,7 @@
 package cloudpit.dev
 
 import java.io.{File, FileOutputStream}
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
 import java.util.Properties
 
 import com.dimafeng.testcontainers.PostgreSQLContainer
