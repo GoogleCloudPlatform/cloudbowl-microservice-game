@@ -19,12 +19,8 @@ package cloudpit
 import java.util.UUID
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
 import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, Players, ViewerEvent, ViewerJoin, ViewerLeave, Viewers}
 import cloudpit.KafkaSerialization._
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 object Battle extends App {
 
