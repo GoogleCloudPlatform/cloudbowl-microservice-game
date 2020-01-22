@@ -40,9 +40,12 @@ class DBSpec extends PlaySpec with GuiceOneAppPerTest with ForAllTestContainer {
   private def dao = app.injector.instanceOf[DAO]
   private def database = app.injector.instanceOf[Database]
 
+  /*
   "arenas" must {
     "by empty by default" in Evolutions.withEvolutions(database) {
       await(dao.arenas()) mustBe empty
     }
   }
+   */
+
 }

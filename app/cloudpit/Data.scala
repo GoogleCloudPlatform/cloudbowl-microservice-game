@@ -20,29 +20,54 @@ import java.net.URL
 
 import play.api.libs.json.Json
 
+import scala.util.Random
+
 case class Arena(path: Arena.Path)
 
 case class Player(service: Player.Service, name: String, pic: URL)
 
-case class ArenaPlayer(arenaPath: Arena.Path, playerService: Player.Service, x: Int, y: Int, direction: Direction)
+case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean)
+
+// todo: scores
+// todo: on player join, reset scores
+case class Arenas(arenaPlayers: Map[Arena.Path, Map[Player.Service, PlayerState]])
 
 object Arena {
   implicit val jsWrites = Json.writes[Arena]
   type Path = String
+
+  val throwDistance = 3
+
+  val fullness = 0.15
+  val aspectRatio = 4/3
+
+  def dimensions(numPlayers: Int): (Int, Int) = {
+    val volume = numPlayers / fullness
+    val width = Math.round(Math.sqrt(volume * aspectRatio)).intValue()
+    val height = width * aspectRatio
+    width -> height
+  }
 }
 
 object Player {
   type Service = String
 }
 
-sealed trait Direction
-case object N extends Direction
-case object W extends Direction
-case object S extends Direction
-case object E extends Direction
-
 // todo: encode the circular laws in types
 object Direction {
+  sealed trait Direction
+
+  case object N extends Direction
+  case object W extends Direction
+  case object S extends Direction
+  case object E extends Direction
+
+  implicit val nJsonWrites = Json.writes[N.type]
+  implicit val wJsonWrites = Json.writes[W.type]
+  implicit val sJsonWrites = Json.writes[S.type]
+  implicit val eJsonWrites = Json.writes[E.type]
+  implicit val jsonWrites = Json.writes[Direction]
+
   def left(direction: Direction): Direction = {
       direction match {
         case N => W
@@ -54,5 +79,35 @@ object Direction {
 
   def right(direction: Direction): Direction = {
     left(left(left(direction)))
+  }
+
+  def random: Direction = {
+    Random.shuffle(Seq(N, W, S, E)).head
+  }
+}
+
+object PlayerState {
+  implicit val jsonWrites = Json.writes[PlayerState]
+}
+
+sealed abstract class Move(val command: Char)
+
+case object Forward extends Move('F')
+case object TurnRight extends Move('R')
+case object TurnLeft extends Move('L')
+case object Throw extends Move('T')
+
+object Move {
+  def parse(command: Char): Option[Move] = {
+    if (command == Forward.command)
+      Some(Forward)
+    else if (command == TurnRight.command)
+      Some(TurnRight)
+    else if (command == TurnLeft.command)
+      Some(TurnLeft)
+    else if (command == Throw.command)
+      Some(Throw)
+    else
+      None
   }
 }

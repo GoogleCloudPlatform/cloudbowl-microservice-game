@@ -19,28 +19,25 @@ package cloudpit
 object Events {
 
   sealed trait ViewerEvent {
-    val arena: Arena
+    val arena: Arena.Path
   }
 
-  final case class ViewerJoin(arena: Arena) extends ViewerEvent
-  final case class ViewerLeave(arena: Arena) extends ViewerEvent
+  final case class ViewerJoin(arena: Arena.Path) extends ViewerEvent
+  final case class ViewerLeave(arena: Arena.Path) extends ViewerEvent
 
 
   sealed trait PlayerEvent {
-    val arena: Arena
+    val arena: Arena.Path
     val player: Player
   }
 
-  final case class PlayerJoin(arena: Arena, player: Player) extends PlayerEvent
-  final case class PlayerLeave(arena: Arena, player: Player) extends PlayerEvent
+  final case class PlayerJoin(arena: Arena.Path, player: Player) extends PlayerEvent
+  final case class PlayerLeave(arena: Arena.Path, player: Player) extends PlayerEvent
 
 
-  final case class ArenaUpdate(arenaPlayers: Set[ArenaPlayer])
+  case class Viewers(viewerCount: Map[Arena.Path, Int])
 
-
-  case class Viewers(viewerCount: Map[Arena, Int])
-
-  case class Players(players: Map[Arena, Set[Player]])
+  case class Players(players: Map[Arena.Path, Set[Player]])
 
 
 

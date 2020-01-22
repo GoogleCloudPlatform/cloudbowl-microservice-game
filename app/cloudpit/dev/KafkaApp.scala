@@ -89,14 +89,14 @@ object KafkaProducerApp extends App {
 
     line.split("/") match {
       case Array(arena, "playerjoin", path) =>
-        send(Topics.players, arena, PlayerJoin(Arena(arena), player(path)))
+        send(Topics.players, arena, PlayerJoin(arena, player(path)))
       case Array(arena, "playerleave", path) =>
-        send(Topics.players, arena, PlayerLeave(Arena(arena), player(path)))
+        send(Topics.players, arena, PlayerLeave(arena, player(path)))
 
       case Array(arena, "viewerjoin") =>
-        send(Topics.viewers, arena, ViewerJoin(Arena(arena)))
+        send(Topics.viewers, arena, ViewerJoin(arena))
       case Array(arena, "viewerleave") =>
-        send(Topics.viewers, arena, ViewerLeave(Arena(arena)))
+        send(Topics.viewers, arena, ViewerLeave(arena))
 
       case _ =>
         println(s"Invalid command: $line")

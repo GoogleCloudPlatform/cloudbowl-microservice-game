@@ -63,7 +63,9 @@ object KafkaSerialization {
   import upickle.default._
 
   implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
-  implicit val arenaReadWriter: ReadWriter[Arena] = macroRW
+  implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
+  implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
+  implicit val arenaStateReadWriter: ReadWriter[Arenas] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
   implicit val playerJoinReadWriter: ReadWriter[PlayerJoin] = macroRW
   implicit val playerLeaveReadWriter: ReadWriter[PlayerLeave] = macroRW
@@ -81,8 +83,8 @@ object KafkaSerialization {
   }
 
   implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
-  implicit val arenaSerializer: Serializer[Arena] = (_: String, data: Arena) => {
-    writeBinary[Arena](data)
+  implicit val arenaStateSerializer: Serializer[Arenas] = (_: String, data: Arenas) => {
+    writeBinary[Arenas](data)
   }
   implicit val playerJoinSerializer: Serializer[PlayerJoin] = (_: String, data: PlayerJoin) => {
     writeBinary[PlayerJoin](data)
