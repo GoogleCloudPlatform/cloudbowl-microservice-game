@@ -18,14 +18,16 @@ package cloudpit
 
 import java.util.UUID
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, Players, ViewerEvent, ViewerJoin, ViewerLeave, Viewers}
+import cloudpit.Events.{ArenasUpdate, PlayerEvent, PlayerJoin, PlayerLeave, Players, ViewerEvent, ViewerJoin, ViewerLeave, Viewers}
 import cloudpit.KafkaSerialization._
+import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.Status
 import play.api.libs.json.Json
-import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -46,12 +48,12 @@ object Battle extends App {
 
   val viewerSource = Kafka.source[Arena.Path, ViewerEvent](groupId, Topics.viewers)
 
-  val arenaSink = Kafka.sink[Arena.Path, Arenas]
+  val arenaSink = Kafka.sink[Arena.Path, Map[Player, PlayerState]]
 
 
   val initViewers = Viewers(Map.empty)
   val initPlayers = Players(Map.empty)
-  val initArenas = Arenas(Map.empty)
+  val initArenasUpdate = ArenasUpdate(Map.empty)
 
   val playersSource = playerSource.scan(initPlayers) { case (players, record) =>
     val arena = record.key()
@@ -228,17 +230,18 @@ object Battle extends App {
       val currentArena = arenas.arenaPlayers.getOrElse(arena, Map.empty)
                            .filterKeys(playersInArena.map(_.service).contains) // filter out players who have left
 
-      // todo: reset wasHit on each round
       val readyArena = playersInArena.foldLeft(currentArena) { case (thisArena, player) =>
-        if (thisArena.contains(player.service))
-          thisArena
-        else
+        thisArena.get(player.service).fold {
           addPlayerToArena(currentArena, players, player.service)
+        } { playerState =>
+          thisArena.updated(player.service, playerState.copy(wasHit = false))
+        }
       }
 
       val playerMovesFuture = Future.traverse(playersInArena) { player =>
         playerMove(readyArena, player).map(player.service -> _)
       } map { playerMoves =>
+        // if the player didn't make a move, remove it from the moves that need to be performed
         playerMoves.toMap.collect {
           case (k, Some(v)) => k -> v
         }
@@ -254,13 +257,54 @@ object Battle extends App {
     }
   }
 
+  def performArenasUpdate(arenasUpdate: ArenasUpdate, playersViewers: ((Players, Viewers), Unit)): Future[ArenasUpdate] = {
+    val ((players, viewers), _) = playersViewers
+    // todo: cleanup
+    // transform ArenasUpdate to Arenas
+    val currentArenas = Arenas {
+      arenasUpdate.arenas.map { case (arenaPath, arena) =>
+        arenaPath -> arena.map { case (player, playerState) =>
+          player.service -> playerState
+        }
+      }
+    }
+
+    val arenasFuture = updateArenas(players, viewers, currentArenas)
+
+    // todo: cleanup
+    // transform Arenas to ArenaUpdate
+    arenasFuture.map { arenas =>
+      ArenasUpdate {
+        arenas.arenaPlayers.map { case (arenaPath, arena) =>
+          arenaPath -> arena.flatMap { case (playerService, playerState) =>
+            for {
+              playersInArena <- players.players.get(arenaPath)
+              player <- playersInArena.find(_.service == playerService)
+            } yield player -> playerState
+          }
+        }
+      }
+    }
+  }
+
+  def arenasUpdateToProducerRecord(arenasUpdate: ArenasUpdate): Source[ProducerRecord[Arena.Path, Map[Player, PlayerState]], NotUsed] = {
+    Source {
+      arenasUpdate.arenas.map { case (arenaPath, arena) =>
+        new ProducerRecord(Topics.arenasUpdate, arenaPath, arena)
+      }
+    }
+  }
+
   val tickSource = Source.tick(0.seconds, 1.second, ())
 
 
-  playersSource.zipLatest(viewersSource).zipLatest(tickSource).runFoldAsync(initArenas) { case (currentArenas, ((players, viewers), _)) =>
-    println((players, viewers, currentArenas))
-    updateArenas(players, viewers, currentArenas)
-  }
+  playersSource
+    .zipLatest(viewersSource)
+    .zipLatest(tickSource)
+    .scanAsync(initArenasUpdate)(performArenasUpdate)
+    .flatMapConcat(arenasUpdateToProducerRecord)
+    .to(arenaSink)
+    .run()
 
   actorSystem.registerOnTermination {
     wsClient.close()

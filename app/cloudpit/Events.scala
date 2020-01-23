@@ -39,6 +39,6 @@ object Events {
 
   case class Players(players: Map[Arena.Path, Set[Player]])
 
-
+  case class ArenasUpdate(arenas: Map[Arena.Path, Map[Player, PlayerState]])
 
 }

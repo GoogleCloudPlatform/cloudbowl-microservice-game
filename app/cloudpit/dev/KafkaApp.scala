@@ -25,7 +25,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, ViewerEvent, ViewerJoin, ViewerLeave}
 import cloudpit.KafkaSerialization._
-import cloudpit.{Arena, Kafka, Player, Topics}
+import cloudpit.{Arena, Kafka, Player, PlayerState, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
@@ -63,8 +63,9 @@ object KafkaConsumerApp extends App {
 
   val playersSource = Kafka.source[Arena.Path, PlayerEvent](UUID.randomUUID().toString, Topics.players)
   val viewersSource = Kafka.source[Arena.Path, ViewerEvent](UUID.randomUUID().toString, Topics.viewers)
+  val arenasUpdateSource = Kafka.source[Arena.Path, Map[Player, PlayerState]](UUID.randomUUID().toString, Topics.arenasUpdate)
 
-  playersSource.merge(viewersSource).runForeach(println)
+  playersSource.merge(viewersSource).merge(arenasUpdateSource).runForeach(println)
 }
 
 object KafkaProducerApp extends App {

@@ -22,7 +22,7 @@ import akka.actor.ActorSystem
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenasUpdate, PlayerEvent, PlayerJoin, PlayerLeave, ViewerEvent, ViewerJoin, ViewerLeave}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer}
@@ -56,6 +56,7 @@ object Topics {
 
   val players = "players"
   val viewers = "viewers"
+  val arenasUpdate = "arenasUpdate"
 
 }
 
@@ -65,7 +66,8 @@ object KafkaSerialization {
   implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
-  implicit val arenaStateReadWriter: ReadWriter[Arenas] = macroRW
+  implicit val arenasReadWriter: ReadWriter[Arenas] = macroRW
+  implicit val arenasUpdateReadWriter: ReadWriter[ArenasUpdate] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
   implicit val playerJoinReadWriter: ReadWriter[PlayerJoin] = macroRW
   implicit val playerLeaveReadWriter: ReadWriter[PlayerLeave] = macroRW
@@ -80,6 +82,9 @@ object KafkaSerialization {
   }
   implicit val viewerEventDeserializer: Deserializer[ViewerEvent] = (_: String, data: Array[Byte]) => {
     readBinary[ViewerEvent](data)
+  }
+  implicit val mapPlayerPlayerStateDeserializer: Deserializer[Map[Player, PlayerState]] = (_: String, data: Array[Byte]) => {
+    readBinary[Map[Player, PlayerState]](data)
   }
 
   implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
@@ -97,6 +102,9 @@ object KafkaSerialization {
   }
   implicit val viewerLeaveSerializer: Serializer[ViewerLeave] = (_: String, data: ViewerLeave) => {
     writeBinary[ViewerLeave](data)
+  }
+  implicit val mapPlayerPlayerStateSerializer: Serializer[Map[Player, PlayerState]] = (_: String, data: Map[Player, PlayerState]) => {
+    writeBinary[Map[Player, PlayerState]](data)
   }
 
 }
