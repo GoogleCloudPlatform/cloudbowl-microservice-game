@@ -287,11 +287,9 @@ object Battle extends App {
     }
   }
 
-  def arenasUpdateToProducerRecord(arenasUpdate: ArenasUpdate): Source[ProducerRecord[Arena.Path, Map[Player, PlayerState]], NotUsed] = {
-    Source {
-      arenasUpdate.arenas.map { case (arenaPath, arena) =>
-        new ProducerRecord(Topics.arenasUpdate, arenaPath, arena)
-      }
+  def arenasUpdateToProducerRecord(arenasUpdate: ArenasUpdate): scala.collection.immutable.Iterable[ProducerRecord[Arena.Path, Map[Player, PlayerState]]] = {
+    arenasUpdate.arenas.map { case (arenaPath, arena) =>
+      new ProducerRecord(Topics.arenasUpdate, arenaPath, arena)
     }
   }
 
@@ -302,7 +300,7 @@ object Battle extends App {
     .zipLatest(viewersSource)
     .zipLatest(tickSource)
     .scanAsync(initArenasUpdate)(performArenasUpdate)
-    .flatMapConcat(arenasUpdateToProducerRecord)
+    .mapConcat(arenasUpdateToProducerRecord)
     .to(arenaSink)
     .run()
 
