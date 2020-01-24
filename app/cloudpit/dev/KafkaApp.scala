@@ -41,7 +41,7 @@ object KafkaApp extends App {
     container.stop()
   }
 
-  val destination = new File("target/scala-2.12/classes/application.properties")
+  val destination = new File("target/scala-2.13/classes/application.properties")
   destination.delete()
   Files.createDirectories(destination.getParentFile.toPath)
 
@@ -82,7 +82,7 @@ object KafkaProducerApp extends App {
       Player(service.toString, path, service)
     }
 
-    def send[E](topic: String, arena: Arena.Path, event: E)(implicit serializer: Serializer[E]) {
+    def send[E](topic: String, arena: Arena.Path, event: E)(implicit serializer: Serializer[E]): Unit = {
       val record = new ProducerRecord(topic, arena, event)
       println("sending" -> record)
       Source.single(record).to(Kafka.sink[Arena.Path, E]).run()

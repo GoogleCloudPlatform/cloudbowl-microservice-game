@@ -21,7 +21,7 @@ import play.api.mvc.InjectedController
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class Controller @Inject()(dao: DAO)(implicit ec: ExecutionContext) extends InjectedController {
+class Controller @Inject()(implicit ec: ExecutionContext) extends InjectedController {
 
   if (false) {
     ec

@@ -5,7 +5,7 @@ enablePlugins(PlayScala, AutomateHeaderPlugin)
 
 name := "cloudpit"
 
-scalaVersion := "2.12.10"
+scalaVersion := "2.13.1"
 
 resolvers += Resolver.mavenLocal
 
@@ -13,19 +13,12 @@ libraryDependencies ++= Seq(
   guice,
   ws,
   filters,
-  jdbc,
-  evolutions,
-
-  "org.postgresql"         %  "postgresql"                      % "42.1.4",
-
-  "io.getquill"            %% "quill-async-postgres"            % "3.5.0",
 
   "org.webjars"            %% "webjars-play"                    % "2.8.0",
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.0",
+  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.1",
   "com.lihaoyi"            %% "upickle"                         % "0.9.5",
 
-  "com.dimafeng"           %% "testcontainers-scala-postgresql" % "0.34.1",
   "com.dimafeng"           %% "testcontainers-scala-kafka"      % "0.34.3",
   "org.scalatestplus.play" %% "scalatestplus-play"              % "5.0.0" % "test"
 )
@@ -36,6 +29,7 @@ scalacOptions ++= Seq(
   "-explaintypes",
   "-feature",
   "-Xcheckinit",
+  //"-Xlog-implicits",
   "-Xfatal-warnings",
   "-Xlint:adapted-args",
   "-Xlint:constant",

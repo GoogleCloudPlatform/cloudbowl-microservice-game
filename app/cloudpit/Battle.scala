@@ -20,7 +20,7 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Flow, Source}
 import cloudpit.Events.{ArenasUpdate, PlayerEvent, PlayerJoin, PlayerLeave, Players, ViewerEvent, ViewerJoin, ViewerLeave, Viewers}
 import cloudpit.KafkaSerialization._
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -228,7 +228,7 @@ object Battle extends App {
     val updatedArenas = viewers.viewerCount.filter(_._2 > 0).map { case (arena, _) =>
       val playersInArena = players.players.getOrElse(arena, Set.empty)
       val currentArena = arenas.arenaPlayers.getOrElse(arena, Map.empty)
-                           .filterKeys(playersInArena.map(_.service).contains) // filter out players who have left
+                           .view.filterKeys(playersInArena.map(_.service).contains).toMap // filter out players who have left
 
       val readyArena = playersInArena.foldLeft(currentArena) { case (thisArena, player) =>
         thisArena.get(player.service).fold {
@@ -238,9 +238,21 @@ object Battle extends App {
         }
       }
 
-      val playerMovesFuture = Future.traverse(playersInArena) { player =>
+      // wtf
+      implicit def moveDurationOrdering[A <: (Move, FiniteDuration)]: Ordering[A] = {
+        Ordering.by((_:A)._2)
+      }
+
+      if (false) {
+        moveDurationOrdering
+      }
+      // eowtf
+
+      val playerMovesFutures = playersInArena.map { player =>
         playerMove(readyArena, player).map(player.service -> _)
-      } map { playerMoves =>
+      }
+
+      val playerMovesFuture = Future.sequence(playerMovesFutures).map { playerMoves =>
         // if the player didn't make a move, remove it from the moves that need to be performed
         playerMoves.toMap.collect {
           case (k, Some(v)) => k -> v
@@ -257,7 +269,7 @@ object Battle extends App {
     }
   }
 
-  def performArenasUpdate(arenasUpdate: ArenasUpdate, playersViewers: ((Players, Viewers), Unit)): Future[ArenasUpdate] = {
+  def performArenasUpdate(arenasUpdate: ArenasUpdate, playersViewers: ((Players, Viewers), NotUsed)): Future[ArenasUpdate] = {
     val ((players, viewers), _) = playersViewers
     // todo: cleanup
     // transform ArenasUpdate to Arenas
@@ -293,13 +305,14 @@ object Battle extends App {
     }
   }
 
-  val tickSource = Source.tick(0.seconds, 1.second, ())
-
+  val arenasFlow = Flow[(Players, Viewers)]
+    .zipLatest(Source.repeat(NotUsed))
+    .scanAsync(initArenasUpdate)(performArenasUpdate)
+    .throttle(1, 1.second)
 
   playersSource
     .zipLatest(viewersSource)
-    .zipLatest(tickSource)
-    .scanAsync(initArenasUpdate)(performArenasUpdate)
+    .via(arenasFlow)
     .mapConcat(arenasUpdateToProducerRecord)
     .to(arenaSink)
     .run()
