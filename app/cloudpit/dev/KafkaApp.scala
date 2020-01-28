@@ -17,15 +17,14 @@
 package cloudpit.dev
 
 import java.io.{File, FileOutputStream}
-import java.net.URL
 import java.nio.file.Files
 import java.util.{Properties, UUID}
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import cloudpit.Events.{PlayerEvent, PlayerJoin, PlayerLeave, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
 import cloudpit.KafkaSerialization._
-import cloudpit.{Arena, Kafka, Player, PlayerState, Topics}
+import cloudpit.{Arena, Kafka, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
@@ -61,11 +60,15 @@ object KafkaApp extends App {
 object KafkaConsumerApp extends App {
   private implicit val actorSystem = ActorSystem()
 
-  val playersSource = Kafka.source[Arena.Path, PlayerEvent](UUID.randomUUID().toString, Topics.players)
-  val viewersSource = Kafka.source[Arena.Path, ViewerEvent](UUID.randomUUID().toString, Topics.viewers)
-  val arenasUpdateSource = Kafka.source[Arena.Path, Map[Player, PlayerState]](UUID.randomUUID().toString, Topics.arenasUpdate)
+  val viewerEventsSource = Kafka.source[ViewerEvent.Key, ViewerEvent.Value](UUID.randomUUID().toString, Topics.viewerEvents)
 
-  playersSource.merge(viewersSource).merge(arenasUpdateSource).runForeach(println)
+  val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](UUID.randomUUID().toString, Topics.playersRefresh)
+
+  /*
+  val arenasUpdateSource = Kafka.source[Arena.Path, Map[Player, PlayerState]](UUID.randomUUID().toString, Topics.arenasUpdate)
+   */
+
+  viewerEventsSource.merge(playersRefreshSource).runForeach(println)
 }
 
 object KafkaProducerApp extends App {
@@ -77,27 +80,19 @@ object KafkaProducerApp extends App {
     StdIn.readLine()
   } foreach { line =>
 
-    def player(path: String): Player = {
-      val service = new URL(s"http://localhost:9000/$path")
-      Player(service.toString, path, service)
-    }
-
-    def send[E](topic: String, arena: Arena.Path, event: E)(implicit serializer: Serializer[E]): Unit = {
-      val record = new ProducerRecord(topic, arena, event)
+    def send[K, V](topic: String, key: K, value: V)(implicit keySerializer: Serializer[K], valueSerializer: Serializer[V]): Unit = {
+      val record = new ProducerRecord(topic, key, value)
       println("sending" -> record)
-      Source.single(record).to(Kafka.sink[Arena.Path, E]).run()
+      Source.single(record).to(Kafka.sink[K, V]).run()
     }
 
     line.split("/") match {
-      case Array(arena, "playerjoin", path) =>
-        send(Topics.players, arena, PlayerJoin(arena, player(path)))
-      case Array(arena, "playerleave", path) =>
-        send(Topics.players, arena, PlayerLeave(arena, player(path)))
-
+      case Array(arena, "playersrefresh") =>
+        send(Topics.playersRefresh, arena, PlayersRefresh)
       case Array(arena, "viewerjoin") =>
-        send(Topics.viewers, arena, ViewerJoin(arena))
-      case Array(arena, "viewerleave") =>
-        send(Topics.viewers, arena, ViewerLeave(arena))
+        send(Topics.viewerEvents, (UUID.randomUUID(), ViewerJoin), arena)
+      case Array(arena, "viewerleave", id) =>
+        send(Topics.viewerEvents, (UUID.fromString(id), ViewerLeave), arena)
 
       case _ =>
         println(s"Invalid command: $line")

@@ -16,28 +16,32 @@
 
 package cloudpit
 
-import java.util.UUID
+import java.net.URL
 
-object Events {
+import scala.concurrent.Future
+import scala.util.Random
 
-  sealed trait ViewerEventType
+object Services {
 
-  case object ViewerJoin extends ViewerEventType
-  case object ViewerLeave extends ViewerEventType
-
-  case class ViewerEvent(uuid: UUID, viewerEventType: ViewerEventType, arena: Arena.Path)
-
-  object ViewerEvent {
-    type Key = (UUID, ViewerEventType)
-    type Value = Arena.Path
+  trait PlayerService {
+    def fetch(arena: Arena.Path): Future[Set[Player]]
   }
 
-  type ArenaViewers = Map[Arena.Path, Set[UUID]]
+  class DevPlayerService extends PlayerService {
 
+    def fetch(arena: Arena.Path): Future[Set[Player]] = {
+      Future.successful {
+        if (arena == "empty")
+          Set.empty
+        else
+          Set.fill(Random.nextInt(10) + 1) {
+            val name = Random.alphanumeric.take(6).mkString
+            val service = new URL(s"http://localhost:9000/$name")
+            Player(service.toString, name, service)
+          }
+      }
+    }
 
-  case object PlayersRefresh
-
-
-  case class ArenasUpdate(arenas: Map[Arena.Path, Map[Player, PlayerState]])
+  }
 
 }

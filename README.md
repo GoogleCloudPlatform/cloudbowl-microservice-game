@@ -24,18 +24,17 @@ Run Locally:
     ```
     ./sbt "runMain cloudpit.dev.KafkaProducerApp"
     ```
-1. In the dev Kafka event producer app enter these commands to start a battle:
+1. In the dev Kafka event producer app have a viewer join the `foo` arena:
     ```
-    foo/playerjoin/asdf
-    foo/playerjoin/foo
     foo/viewerjoin
     ```
 1. Watch the dev Kafka event viewer
 
 Dev Kafka Event Producer Command Structure:
 ```
-ARENA/EVENT <- where EVENT = viewerjoin | viewerleave
-ARENA/EVENT/PLAYER <- where EVENT = playerjoin | playerleave
+ARENA/viewerjoin
+ARENA/viewerleave/VIEWER
+ARENA/playersrefresh
 ```
 
 # TODO
