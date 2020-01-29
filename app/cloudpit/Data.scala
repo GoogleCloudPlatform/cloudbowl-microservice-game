@@ -39,7 +39,7 @@ object Arena {
   val throwDistance = 3
 
   val fullness = 0.15
-  val aspectRatio = 4/3
+  val aspectRatio = 4 / 3
 
   def dimensions(numPlayers: Int): (Int, Int) = {
     val volume = numPlayers / fullness
@@ -55,11 +55,15 @@ object Player {
 
 // todo: encode the circular laws in types
 object Direction {
+
   sealed trait Direction
 
   case object N extends Direction
+
   case object W extends Direction
+
   case object S extends Direction
+
   case object E extends Direction
 
   implicit val nJsonWrites = Json.writes[N.type]
@@ -69,12 +73,12 @@ object Direction {
   implicit val jsonWrites = Json.writes[Direction]
 
   def left(direction: Direction): Direction = {
-      direction match {
-        case N => W
-        case W => S
-        case S => E
-        case E => N
-      }
+    direction match {
+      case N => W
+      case W => S
+      case S => E
+      case E => N
+    }
   }
 
   def right(direction: Direction): Direction = {
@@ -93,8 +97,11 @@ object PlayerState {
 sealed abstract class Move(val command: Char)
 
 case object Forward extends Move('F')
+
 case object TurnRight extends Move('R')
+
 case object TurnLeft extends Move('L')
+
 case object Throw extends Move('T')
 
 object Move {

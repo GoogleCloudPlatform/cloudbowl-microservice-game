@@ -23,6 +23,7 @@ object Events {
   sealed trait ViewerEventType
 
   case object ViewerJoin extends ViewerEventType
+
   case object ViewerLeave extends ViewerEventType
 
   case class ViewerEvent(uuid: UUID, viewerEventType: ViewerEventType, arena: Arena.Path)
@@ -38,6 +39,6 @@ object Events {
   case object PlayersRefresh
 
 
-  case class ArenasUpdate(arenas: Map[Arena.Path, Map[Player, PlayerState]])
+  type ArenaUpdate = (Arena.Path, Map[Player, PlayerState])
 
 }

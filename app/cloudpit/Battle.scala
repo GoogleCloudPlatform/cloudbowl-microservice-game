@@ -21,23 +21,20 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.kafka.Subscriptions
-import akka.kafka.scaladsl.Consumer
 import akka.stream.contrib.PassThroughFlow
-import akka.stream.{FlowShape, Graph}
-import akka.stream.scaladsl.{Broadcast, BroadcastHub, Flow, GraphDSL, Keep, Partition, PartitionHub, Sink, Source, ZipWith}
-import cloudpit.Events.{ArenaViewers, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import cloudpit.Events.{ArenaUpdate, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
 import cloudpit.KafkaSerialization._
 import cloudpit.Persistence.FileIO
 import cloudpit.Services.DevPlayerService
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.Status
 import play.api.libs.json.Json
-import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -112,6 +109,7 @@ object Battle extends App {
       .mapConcat(_.toList)
       .via(PassThroughFlow(saveViewersFlow, Keep.left))
       .map(viewers => viewers._2 -> viewers._3) // drop the offset
+      .alsoTo(Sink.foreach(println)) // todo: debugging
       .mergeSubstreams
   }
 
@@ -123,9 +121,10 @@ object Battle extends App {
   }
 
   type ViewersOrPlayers = Either[(Arena.Path, Set[UUID]), (Arena.Path, Set[Player])]
-  type ViewersAndPlayers = (Arena.Path, Option[Set[UUID]], Option[Set[Player]])
+  type MaybeViewersAndMaybePlayers = (Arena.Path, Option[Set[UUID]], Option[Set[Player]])
+  type ViewersAndPlayers = (Arena.Path, Set[UUID], Set[Player])
 
-  def updatePlayers(arenaViewersAndPlayers: Option[ViewersAndPlayers], viewersOrPlayers: ViewersOrPlayers): Future[Option[ViewersAndPlayers]] = {
+  def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers): Future[Option[MaybeViewersAndMaybePlayers]] = {
     viewersOrPlayers.fold({ case (arena, viewers) =>
       // We have the viewers, if we don't have the players, fetch them
       arenaViewersAndPlayers.flatMap(_._3).map(Future.successful).getOrElse {
@@ -148,7 +147,7 @@ object Battle extends App {
     }
   }
 
-  def onlyArenasWithViewersAndPlayers(maybeArenaViewersAndPlayers: Option[ViewersAndPlayers]): scala.collection.immutable.Iterable[(Arena.Path, Set[UUID], Set[Player])] = {
+  def onlyArenasWithViewersAndPlayers(maybeArenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers]): scala.collection.immutable.Iterable[ViewersAndPlayers] = {
     val maybe = for {
       arenaViewersAndPlayers <- maybeArenaViewersAndPlayers
       viewers <- arenaViewersAndPlayers._2
@@ -163,9 +162,9 @@ object Battle extends App {
     .map(Left(_))
     .merge(playersRefreshSource.map(Right(_)))
     .groupBy(Int.MaxValue, arenaPathFromViewerOrPlayers)
-    .scanAsync(Option.empty[ViewersAndPlayers])(updatePlayers)
+    .scanAsync(Option.empty[MaybeViewersAndMaybePlayers])(updatePlayers)
     .mapConcat(onlyArenasWithViewersAndPlayers)
-    //.mergeSubstreams
+  //.mergeSubstreams
 
   val timingRequestFilter = WSRequestFilter { requestExecutor =>
     WSRequestExecutor { request =>
@@ -245,7 +244,7 @@ object Battle extends App {
     }
   }
 
-  def isPlayerInPosition(position: (Int, Int))(player: (Player.Service,PlayerState)): Boolean = {
+  def isPlayerInPosition(position: (Int, Int))(player: (Player.Service, PlayerState)): Boolean = {
     player._2.x == position._1 && player._2.y == position._2
   }
 
@@ -257,7 +256,7 @@ object Battle extends App {
     val isOtherPlayerInPosition = arena.exists(isPlayerInPosition(newTentativePosition))
 
     val isOutOfBounds = newTentativePosition._1 < 0 || newTentativePosition._1 > dimensions._1 - 1 ||
-                        newTentativePosition._2 < 0 || newTentativePosition._2 > dimensions._2 - 1
+      newTentativePosition._2 < 0 || newTentativePosition._2 > dimensions._2 - 1
 
     if (isOtherPlayerInPosition || isOutOfBounds)
       arena
@@ -303,98 +302,94 @@ object Battle extends App {
     }
   }
 
-  /*
-  def updateArenas(players: Players, viewers: Viewers, arenas: Arenas): Future[Arenas] = {
-    val updatedArenas = viewers.viewerCount.filter(_._2 > 0).map { case (arena, _) =>
-      val playersInArena = players.players.getOrElse(arena, Set.empty)
-      val currentArena = arenas.arenaPlayers.getOrElse(arena, Map.empty)
-                           .view.filterKeys(playersInArena.map(_.service).contains).toMap // filter out players who have left
+  type ArenaState = (Arena.Path, Set[UUID], Set[Player], Map[Player.Service, PlayerState])
 
-      val readyArena = playersInArena.foldLeft(currentArena) { case (thisArena, player) =>
-        thisArena.get(player.service).fold {
-          addPlayerToArena(currentArena, players, player.service)
-        } { playerState =>
-          thisArena.updated(player.service, playerState.copy(wasHit = false))
-        }
+  def updateArena(current: ArenaState): Future[ArenaState] = {
+    val (arena, viewers, players, state) = current
+
+    val stateWithGonePlayersRemoved = state.view.filterKeys(players.map(_.service).contains)
+
+    val readyArena = players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
+      currentState.get(player.service).fold {
+        addPlayerToArena(currentState, players, player.service)
+      } { playerState =>
+        currentState.updated(player.service, playerState.copy(wasHit = false))
       }
-
-      // wtf
-      implicit def moveDurationOrdering[A <: (Move, FiniteDuration)]: Ordering[A] = {
-        Ordering.by((_:A)._2)
-      }
-
-      if (false) {
-        moveDurationOrdering
-      }
-      // eowtf
-
-      val playerMovesFutures = playersInArena.map { player =>
-        playerMove(readyArena, player).map(player.service -> _)
-      }
-
-      val playerMovesFuture = Future.sequence(playerMovesFutures).map { playerMoves =>
-        // if the player didn't make a move, remove it from the moves that need to be performed
-        playerMoves.toMap.collect {
-          case (k, Some(v)) => k -> v
-        }
-      }
-
-      val updatedArena = playerMovesFuture.map(performMoves(readyArena))
-
-      updatedArena.map(arena -> _)
     }
 
-    Future.sequence(updatedArenas).map { arenas =>
-      Arenas(arenas.toMap)
+    // wtf
+    implicit def moveDurationOrdering[A <: (Move, FiniteDuration)]: Ordering[A] = {
+      Ordering.by((_: A)._2)
     }
+
+    if (false) {
+      moveDurationOrdering
+    }
+    // eowtf
+
+    val playerMovesFutures = players.map { player =>
+      playerMove(readyArena, player).map(player.service -> _)
+    }
+
+    val playerMovesFuture = Future.sequence(playerMovesFutures).map { playerMoves =>
+      // if the player didn't make a move, remove it from the moves that need to be performed
+      playerMoves.toMap.collect {
+        case (k, Some(v)) => k -> v
+      }
+    }
+
+    val updatedArena = playerMovesFuture.map(performMoves(readyArena))
+
+    updatedArena.map((arena, viewers, players, _))
   }
 
-  def performArenasUpdate(data: (((Players, Viewers), ArenasUpdate), NotUsed)): Future[ArenasUpdate] = {
-    val (((players, viewers), arenasUpdate), _) = data
-    // todo: cleanup
-    // transform ArenasUpdate to Arenas
-    val currentArenas = Arenas {
-      arenasUpdate.arenas.map { case (arenaPath, arena) =>
-        arenaPath -> arena.map { case (player, playerState) =>
-          player.service -> playerState
-        }
-      }
-    }
+  def arenaStateToArenaUpdate(arenaState: ArenaState): ArenaUpdate = {
+    val playersStates = arenaState._3.flatMap { player =>
+      arenaState._4.get(player.service).map(player -> _)
+    }.toMap
 
-    val arenasFuture = updateArenas(players, viewers, currentArenas)
-
-    // todo: cleanup
-    // transform Arenas to ArenaUpdate
-    arenasFuture.map { arenas =>
-      ArenasUpdate {
-        arenas.arenaPlayers.map { case (arenaPath, arena) =>
-          arenaPath -> arena.flatMap { case (playerService, playerState) =>
-            for {
-              playersInArena <- players.players.get(arenaPath)
-              player <- playersInArena.find(_.service == playerService)
-            } yield player -> playerState
-          }
-        }
-      }
-    }
+    arenaState._1 -> playersStates
   }
 
-  def arenasUpdateToProducerRecord(arenasUpdate: ArenasUpdate): scala.collection.immutable.Iterable[ProducerRecord[Arena.Path, Map[Player, PlayerState]]] = {
-    arenasUpdate.arenas.map { case (arenaPath, arena) =>
-      new ProducerRecord(Topics.arenasUpdate, arenaPath, arena)
+  def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed)): Future[Option[ArenaState]] = {
+    val (viewersAndPlayers, _) = data
+
+    val arenaState = maybeArenaState.flatMap { case (_, _, currentPlayers, playersState) =>
+      if (currentPlayers == viewersAndPlayers._3)
+      // update the viewers
+        Some((viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, playersState))
+      else
+      // if the players changes, reinit the playersState
+        Option.empty
+    } getOrElse {
+      (viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, Map.empty[Player.Service, PlayerState])
     }
+
+    updateArena(arenaState).map(Some(_))
   }
 
-  val arenasFlow = Flow[(Players, Viewers)]
-    .zipLatest(Source.single(initArenasUpdate))
+  // todo: currently no persistence of ArenaState so it is lost on restart
+  val arenaUpdateFlow = Flow[ViewersAndPlayers]
     .zipLatest(Source.repeat(NotUsed))
-    .mapAsync(100)(performArenasUpdate)
+    .filter(_._1._2.nonEmpty) // only arenas with viewers
+    .scanAsync(Option.empty[ArenaState])(performArenaUpdate)
+    .mapConcat(_.toList)
     .throttle(1, 1.second)
-    .alsoTo(Sink.foreach(println))
+    .map(arenaStateToArenaUpdate)
+    .alsoTo(Sink.foreach(println)) // todo: debugging
 
-   */
 
-  viewersAndPlayersSource.to(Sink.foreach(println)).run()
+  def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, Map[Player, PlayerState]] = {
+    new ProducerRecord(Topics.arenaUpdate, arenaUpdate._1, arenaUpdate._2)
+  }
+
+  val arenaUpdateSink = Kafka.sink[Arena.Path, Map[Player, PlayerState]]
+
+  viewersAndPlayersSource
+    .via(arenaUpdateFlow)
+    .map(arenaUpdateToProducerRecord)
+    .to(arenaUpdateSink)
+    .run()
 
   actorSystem.registerOnTermination {
     wsClient.close()

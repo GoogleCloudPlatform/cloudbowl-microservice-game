@@ -24,9 +24,9 @@ import akka.actor.ActorSystem
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events.{ArenasUpdate, PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
 import org.apache.commons.compress.utils.IOUtils
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
@@ -67,18 +67,19 @@ object Topics {
 
   val playersRefresh = "playersRefresh"
   val viewerEvents = "viewerEvents"
-  val arenasUpdate = "arenasUpdate"
+  val arenaUpdate = "arenaUpdate"
 
 }
 
 object KafkaSerialization {
+
   import upickle.default._
 
   implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
   implicit val arenasReadWriter: ReadWriter[Arenas] = macroRW
-  implicit val arenasUpdateReadWriter: ReadWriter[ArenasUpdate] = macroRW
+  //implicit val arenasUpdateReadWriter: ReadWriter[ArenasUpdate] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
   //implicit val playerJoinReadWriter: ReadWriter[PlayerJoin] = macroRW
   //implicit val playerLeaveReadWriter: ReadWriter[PlayerLeave] = macroRW
@@ -173,6 +174,7 @@ object KafkaSerialization {
 }
 
 object Persistence {
+
   import java.io.{BufferedInputStream, BufferedOutputStream, FileInputStream, FileOutputStream}
 
   import upickle.default._
@@ -181,6 +183,7 @@ object Persistence {
 
   trait IO {
     def save[T](topic: String, key: String, offset: Long, t: T)(implicit writer: Writer[T]): Future[Unit]
+
     def restore[T](topic: String)(implicit reader: Reader[T]): Future[(Long, Map[String, T])]
   }
 
