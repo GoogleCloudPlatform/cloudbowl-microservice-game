@@ -68,7 +68,7 @@ object Battle extends App {
     }
   }
 
-  def arenaPath(initOrRecord: InitOrRecord): Arena.Path = {
+  def arenaPathFromInitOrRecord(initOrRecord: InitOrRecord): Arena.Path = {
     initOrRecord match {
       case Left(init) => init._1
       case Right(record) => record.value()
@@ -100,152 +100,73 @@ object Battle extends App {
   // Fold the existing projections with events
   // Remove the initial empty emit since `scan` emits with the initial value
   // Save the updated projection
+  // Ultimately emitting an event for each arena from a projection and any viewer updates following
   val viewersSource = Source.future(viewersExisting).flatMapConcat { case (initOffset, initViewers) =>
     val viewerEventsSource = Kafka.source[ViewerEvent.Key, ViewerEvent.Value](groupId, Topics.viewerEvents, Some(initOffset + 1))
 
     Source(initViewers)
       .map[InitOrRecord](Left(_))
       .concat(viewerEventsSource.map[InitOrRecord](Right(_)))
-      .groupBy(100, arenaPath)
+      .groupBy(Int.MaxValue, arenaPathFromInitOrRecord)
       .scan(Option.empty[(Option[Long], Arena.Path, Set[UUID])])(updateViewers)
       .mapConcat(_.toList)
       .via(PassThroughFlow(saveViewersFlow, Keep.left))
+      .map(viewers => viewers._2 -> viewers._3) // drop the offset
       .mergeSubstreams
   }
-
-  viewersSource.runForeach(println)
-
-  /*
-    groupBy(100, ) .scan(Option.empty[(Arena.Path, Set[UUID])]) { case (current, (maybeInit, maybeMessage)) =>
-    current.fold()
-  }
-
-   */
-
-    /*
-  val viewersSource = initViewersSource.zipLatest(viewerEventsSource).groupBy(100, { case ((initArena, _), _) =>
-    initArena
-  })
-
-     */
-
-    /*
-    .scan(Option.empty[(Arena.Path, Set[UUID])]) { case (maybeCurrent, ((arena, viewers), record)) =>
-    maybeCurrent.getOrElse(arena -> viewers)
-    updateViewers()
-  }
-
-     */
-
-  /*
-  // nicely this emits even if there are no new messages to read because concat emits for the future completion
-  // : Source[(Arena.Path, Set[UUID]), NotUsed]
-  val viewersSource =  .flatMapConcat { case (lastOffset, viewers) =>
-    val source = Consumer.plainSource(viewerEventsConsumerSettings, Subscriptions.assignmentWithOffset(new TopicPartition(Topics.viewerEvents, 0), lastOffset + 1)) // todo: partition?
-
-    source
-      .map(arenaViewersFlow(viewers))
-      .via(PassThroughFlow(saveViewersFlow, Keep.right))
-      .map(_._1)
-      .mapConcat(identity)
-  } //.mapConcat(identity).groupBy(100, _._1) //.mapConcat(identity) //.alsoTo(Sink.foreach(viewers => println("viewers: " -> viewers)))
-  */
-
-  //val initViewersSource = Source.future(viewersExisting).mapConcat(_._2).groupBy(100, _._1)
-
-  //val viewerEventsSource = Consumer.plainSource(viewerEventsConsumerSettings, Subscriptions.assignmentWithOffset(new TopicPartition(Topics.viewerEvents, 0), 0 + 1))
-
-  //initViewersSource.zipLatest(viewerEventsSource).map
-
-  //viewersSource.to(Sink.foreach(println)).run()
-
-  /*
-  //import scala.language.existentials
-
-
-
-  val viewersSource = Kafka.source[ViewerEvent.Key, ViewerEvent.Value]("foo", Topics.viewerEvents).groupBy(100, _.value()).scan(Set.empty[UUID])(updateViewers).mergeSubstreams
-
-  viewersSource.to(Sink.foreach(println)).run()
-   */
-
-  val playerSource = Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh)
 
   // todo: swappable
   val playerService = new DevPlayerService
 
-  def playersSource(arena: Arena.Path): Source[Set[Player], NotUsed] = {
-    val initPlayersSource = Source.future(playerService.fetch(arena))
-
-    val updatedPlayersSource = Kafka.source[Arena.Path, PlayersRefresh.type](arena, Topics.playersRefresh).mapAsync(100) { record =>
-      playerService.fetch(record.key())
-    }
-
-    initPlayersSource.concat(updatedPlayersSource)
+  val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
+    playerService.fetch(record.key()).map(record.key() -> _)
   }
 
+  type ViewersOrPlayers = Either[(Arena.Path, Set[UUID]), (Arena.Path, Set[Player])]
+  type ViewersAndPlayers = (Arena.Path, Option[Set[UUID]], Option[Set[Player]])
 
-  /*
-  val playerSource = Kafka.source[Arena.Path, PlayerEvent](groupId, Topics.players)
-
-  val viewerEventsSource = Kafka.source[Arena.Path, ViewerEvent](groupId, Topics.viewerEvents)
-
-  val arenaSink = Kafka.sink[Arena.Path, Map[Player, PlayerState]]
-
-  val viewersSource = Kafka.source[Arena.Path, Int](groupId, Topics.viewers)
-  val viewersSink = Kafka.sink[Arena.Path, Int]
-
-  val initViewers = Viewers(Map.empty)
-  val initPlayers = Players(Map.empty)
-  val initArenasUpdate = ArenasUpdate(Map.empty)
-
-
-  val playersSource = Source.single(initPlayers).  .fold() { players =>
-    playerSource.fold(players) { case (players, record) =>
-      val arena = record.key()
-      val event = record.value()
-
-      val currentPlayers = players.players.getOrElse(arena, Set.empty)
-      val updatedPlayers = event match {
-        case PlayerJoin(_, player) =>
-          currentPlayers + player
-        case PlayerLeave(_, player) =>
-          currentPlayers - player
+  def updatePlayers(arenaViewersAndPlayers: Option[ViewersAndPlayers], viewersOrPlayers: ViewersOrPlayers): Future[Option[ViewersAndPlayers]] = {
+    viewersOrPlayers.fold({ case (arena, viewers) =>
+      // We have the viewers, if we don't have the players, fetch them
+      arenaViewersAndPlayers.flatMap(_._3).map(Future.successful).getOrElse {
+        playerService.fetch(arena)
+      } map { players =>
+        Some((arena, Some(viewers), Some(players)))
       }
-
-      Players(players.players.updated(arena, updatedPlayers))
-    }
-  }
-   */
-
-  /*
-  val viewers = viewersSource.fold(initViewers) { case (viewers, record) =>
-    val arena = record.key()
-    val numViewers = record.value()
-    viewers.copy(viewerCount = viewers.viewerCount.updated(arena, numViewers))
-  }
-
-  val viewersSource = Source.single(initViewers).flatMapConcat { viewers =>
-    viewerSource.fold(viewers) { case (viewers, record) =>
-      val arena = record.key()
-      val event = record.value()
-
-      val currentViewers = viewers.viewerCount.getOrElse(arena, 0)
-      val updatedViewers = event match {
-        case ViewerJoin(_) =>
-          currentViewers + 1
-        case ViewerLeave(_) if currentViewers > 0 =>
-          currentViewers - 1
-        case ViewerLeave(_) =>
-          0
+    }, { case (arena, players) =>
+      // We have the players, and maybe the viewers
+      Future.successful {
+        Some((arena, arenaViewersAndPlayers.flatMap(_._2), Some(players)))
       }
+    })
+  }
 
-      Viewers(viewers.viewerCount.updated(arena, updatedViewers))
+  def arenaPathFromViewerOrPlayers(viewersOrPlayers: ViewersOrPlayers): Arena.Path = {
+    viewersOrPlayers match {
+      case Left((arena, _)) => arena
+      case Right((arena, _)) => arena
     }
-  }.alsoTo(Sink.foreach(println))
-   */
+  }
 
-  /*
+  def onlyArenasWithViewersAndPlayers(maybeArenaViewersAndPlayers: Option[ViewersAndPlayers]): scala.collection.immutable.Iterable[(Arena.Path, Set[UUID], Set[Player])] = {
+    val maybe = for {
+      arenaViewersAndPlayers <- maybeArenaViewersAndPlayers
+      viewers <- arenaViewersAndPlayers._2
+      players <- arenaViewersAndPlayers._3
+    } yield (arenaViewersAndPlayers._1, viewers, players)
+
+    maybe.toList
+  }
+
+  // Emits with the initial state of viewers & players, and then emits whenever the viewers or players change
+  val viewersAndPlayersSource = viewersSource
+    .map(Left(_))
+    .merge(playersRefreshSource.map(Right(_)))
+    .groupBy(Int.MaxValue, arenaPathFromViewerOrPlayers)
+    .scanAsync(Option.empty[ViewersAndPlayers])(updatePlayers)
+    .mapConcat(onlyArenasWithViewersAndPlayers)
+    //.mergeSubstreams
+
   val timingRequestFilter = WSRequestFilter { requestExecutor =>
     WSRequestExecutor { request =>
       requestExecutor(request)
@@ -298,8 +219,8 @@ object Battle extends App {
     }
   }
 
-  def addPlayerToArena(arena: Map[Player.Service, PlayerState], players: Players, player: Player.Service): Map[Player.Service, PlayerState] = {
-    val dimensions = Arena.dimensions(players.players.size)
+  def addPlayerToArena(arena: Map[Player.Service, PlayerState], players: Set[Player], player: Player.Service): Map[Player.Service, PlayerState] = {
+    val dimensions = Arena.dimensions(players.size)
 
     val board = for {
       x <- 0 to dimensions._1
@@ -382,7 +303,7 @@ object Battle extends App {
     }
   }
 
-
+  /*
   def updateArenas(players: Players, viewers: Viewers, arenas: Arenas): Future[Arenas] = {
     val updatedArenas = viewers.viewerCount.filter(_._2 > 0).map { case (arena, _) =>
       val playersInArena = players.players.getOrElse(arena, Set.empty)
@@ -470,50 +391,10 @@ object Battle extends App {
     .mapAsync(100)(performArenasUpdate)
     .throttle(1, 1.second)
     .alsoTo(Sink.foreach(println))
-  */
 
-  /*
-  playersSource
-    .zipLatest(viewersSource)
-    .via(arenasFlow)
-    .mapConcat(arenasUpdateToProducerRecord)
-    .to(arenaSink)
-    .run()
    */
 
-  //playersSource.runForeach(println)
-
-  /*
-  def playersInArena(arenaViewers: ArenaViewers): Source[Seq[(Arena.Path, Set[Player])], NotUsed] = {
-    val playersSources = arenaViewers.map { case (arena, viewers) =>
-      if (viewers.nonEmpty)
-        playersSource(arena).map(arena -> _)
-      else
-        Source.empty
-    }
-
-    Source.zipN(playersSources.toSeq)
-  }
-   */
-
-  /*
-  val viewers = Source.empty[(Arena.Path, Set[UUID])]
-  def viewersToPlayers(arena: Arena.Path, viewers: Set[UUID]): Source[(Arena.Path, Set[UUID], Set[Player]), NotUsed] = {
-    playersSource(arena).map((arena, viewers, _))
-  }
-  val players = Source.empty[(Arena.Path, Set[Player])]
-  val arenas = viewers.flatMapMerge(100, viewersToPlayers)
-   */
-
-  //viewersSource.groupBy(100, _._1)
-  //viewersSource.groupBy(100, _._1).to(Sink.foreach(println)).run()
-
-  //viewersSource.runForeach(println)
-
-  // todo: problem with this approach is that we refresh the players every time the viewers change
-  //val arenasWithViewers = viewersSource.flatMapMerge(100, playersInArena)
-
-  //arenasWithViewers.runForeach(println)
+  viewersAndPlayersSource.to(Sink.foreach(println)).run()
 
   actorSystem.registerOnTermination {
     wsClient.close()
