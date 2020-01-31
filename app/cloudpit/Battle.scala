@@ -18,6 +18,7 @@ package cloudpit
 
 import java.io.{File, FileNotFoundException}
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 import akka.NotUsed
 import akka.actor.ActorSystem
@@ -31,8 +32,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.Status
 import play.api.libs.json.Json
-import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
+import play.api.libs.ws.ahc.{StandaloneAhcWSClient, StandaloneAhcWSResponse}
+import play.api.libs.ws.{StandaloneWSResponse, WSRequestExecutor, WSRequestFilter}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -166,9 +167,16 @@ object Battle extends App {
     .mapConcat(onlyArenasWithViewersAndPlayers)
   //.mergeSubstreams
 
+  case class ResponseWithDuration(response: play.shaded.ahc.org.asynchttpclient.Response, duration: FiniteDuration) extends StandaloneAhcWSResponse(response)
+
   val timingRequestFilter = WSRequestFilter { requestExecutor =>
     WSRequestExecutor { request =>
-      requestExecutor(request)
+      val startTime = System.nanoTime()
+      requestExecutor(request).map { response =>
+        val endTime = System.nanoTime()
+        val duration = FiniteDuration(endTime - startTime, TimeUnit.NANOSECONDS)
+        ResponseWithDuration(response.underlying[play.shaded.ahc.org.asynchttpclient.Response], duration)
+      }
     }
   }
 
@@ -203,16 +211,17 @@ object Battle extends App {
       "arena" -> Json.toJson(arena)
     )
 
-    wsClient.url(player.service).withRequestFilter(timingRequestFilter).post(json).map { response =>
-      response.status match {
-        case Status.OK =>
-          for {
-            command <- response.body.toCharArray.headOption
-            move <- Move.parse(command)
-          } yield move -> Random.nextInt(5000).millis // todo: request time
-        case _ =>
-          None
-      }
+    wsClient.url(player.service).withRequestFilter(timingRequestFilter).post(json).collect {
+      case response: ResponseWithDuration =>
+        response.status match {
+          case Status.OK =>
+            for {
+              command <- response.body.toCharArray.headOption
+              move <- Move.parse(command)
+            } yield move -> response.duration
+          case _ =>
+            None
+        }
     } recoverWith {
       case _ => Future.successful(None)
     }
