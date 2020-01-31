@@ -38,7 +38,7 @@ object Events {
 
   case object PlayersRefresh
 
-
-  type ArenaUpdate = (Arena.Path, Map[Player, PlayerState])
+  type ArenaDimsAndPlayers = ((Int, Int), Map[Player, PlayerState])
+  type ArenaUpdate = (Arena.Path, ArenaDimsAndPlayers)
 
 }

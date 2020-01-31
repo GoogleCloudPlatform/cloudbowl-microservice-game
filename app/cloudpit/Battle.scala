@@ -24,7 +24,7 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.contrib.PassThroughFlow
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-import cloudpit.Events.{ArenaUpdate, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
 import cloudpit.KafkaSerialization._
 import cloudpit.Persistence.FileIO
 import cloudpit.Services.DevPlayerService
@@ -33,7 +33,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.Status
 import play.api.libs.json.Json
 import play.api.libs.ws.ahc.{StandaloneAhcWSClient, StandaloneAhcWSResponse}
-import play.api.libs.ws.{StandaloneWSResponse, WSRequestExecutor, WSRequestFilter}
+import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -208,7 +208,10 @@ object Battle extends App {
           "href" -> player.service
         )
       ),
-      "arena" -> Json.toJson(arena)
+      "arena" -> Json.obj(
+        "dims" -> Arena.dimensions(arena.keys.size),
+        "state" -> Json.toJson(arena)
+      )
     )
 
     wsClient.url(player.service).withRequestFilter(timingRequestFilter).post(json).collect {
@@ -357,7 +360,7 @@ object Battle extends App {
       arenaState._4.get(player.service).map(player -> _)
     }.toMap
 
-    arenaState._1 -> playersStates
+    arenaState._1 -> (Arena.dimensions(arenaState._3.size) -> playersStates)
   }
 
   def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed)): Future[Option[ArenaState]] = {
@@ -388,11 +391,11 @@ object Battle extends App {
     .alsoTo(Sink.foreach(println)) // todo: debugging
 
 
-  def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, Map[Player, PlayerState]] = {
+  def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
     new ProducerRecord(Topics.arenaUpdate, arenaUpdate._1, arenaUpdate._2)
   }
 
-  val arenaUpdateSink = Kafka.sink[Arena.Path, Map[Player, PlayerState]]
+  val arenaUpdateSink = Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
 
   viewersAndPlayersSource
     .via(arenaUpdateFlow)

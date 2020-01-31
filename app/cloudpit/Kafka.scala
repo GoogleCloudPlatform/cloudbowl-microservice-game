@@ -24,12 +24,12 @@ import akka.actor.ActorSystem
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events.{PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
 import org.apache.commons.compress.utils.IOUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
+import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer}
 
 import scala.concurrent.Future
 
@@ -78,95 +78,32 @@ object KafkaSerialization {
   implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
-  implicit val arenasReadWriter: ReadWriter[Arenas] = macroRW
-  //implicit val arenasUpdateReadWriter: ReadWriter[ArenasUpdate] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
-  //implicit val playerJoinReadWriter: ReadWriter[PlayerJoin] = macroRW
-  //implicit val playerLeaveReadWriter: ReadWriter[PlayerLeave] = macroRW
-  //implicit val playerEventReadWriter: ReadWriter[PlayerEvent] = ReadWriter.merge(playerJoinReadWriter, playerLeaveReadWriter)
-  //implicit val viewerJoinReadWriter: ReadWriter[ViewerJoin] = macroRW
-  //implicit val viewerLeaveReadWriter: ReadWriter[ViewerLeave] = macroRW
-  //implicit val viewerEventReadWriter: ReadWriter[ViewerEvent] = ReadWriter.merge(viewerJoinReadWriter, viewerLeaveReadWriter)
   implicit val viewerEventTypeReadWriter: ReadWriter[ViewerEventType] = macroRW
-  //implicit val viewerEventKeyReadWriter: ReadWriter[ViewerEvent.Key] = macroRW
 
 
-  implicit val intDeserializer: Deserializer[Int] = (_: String, data: Array[Byte]) => {
-    readBinary[Int](data)
-  }
   implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
-  implicit val uuidDeserializer: Deserializer[UUID] = new UUIDDeserializer
   implicit val viewerEventKeyDeserializer: Deserializer[ViewerEvent.Key] = (_: String, data: Array[Byte]) => {
     readBinary[ViewerEvent.Key](data)
   }
-
   implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => {
     readBinary[PlayersRefresh.type](data)
   }
-
-  /*
-  implicit val playerEventDeserializer: Deserializer[PlayerEvent] = (_: String, data: Array[Byte]) => {
-    readBinary[PlayerEvent](data)
-  }
-   */
-  /*
-  implicit val viewerEventDeserializer: Deserializer[ViewerEvent] = (_: String, data: Array[Byte]) => {
-    readBinary[ViewerEvent](data)
-  }
-   */
-  implicit val mapPlayerPlayerStateDeserializer: Deserializer[Map[Player, PlayerState]] = (_: String, data: Array[Byte]) => {
-    readBinary[Map[Player, PlayerState]](data)
+  implicit val arenaDimsAndPlayersDeserializer: Deserializer[ArenaDimsAndPlayers] = (_: String, data: Array[Byte]) => {
+    readBinary[ArenaDimsAndPlayers](data)
   }
 
 
-  implicit val intSerializer: Serializer[Int] = (_: String, data: Int) => {
-    writeBinary[Int](data)
-  }
   implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
-  implicit val uuidSerializer: Serializer[UUID] = new UUIDSerializer
-  implicit val arenaStateSerializer: Serializer[Arenas] = (_: String, data: Arenas) => {
-    writeBinary[Arenas](data)
+  implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => {
+    writeBinary[ArenaDimsAndPlayers](data)
   }
-
-  /*
-  implicit val playerJoinSerializer: Serializer[PlayerJoin] = (_: String, data: PlayerJoin) => {
-    writeBinary[PlayerJoin](data)
-  }
-  implicit val playerLeaveSerializer: Serializer[PlayerLeave] = (_: String, data: PlayerLeave) => {
-    writeBinary[PlayerLeave](data)
-  }
-   */
-  /*
-  implicit val viewerJoinSerializer: Serializer[ViewerJoin] = (_: String, data: ViewerJoin) => {
-    writeBinary[ViewerJoin](data)
-  }
-  implicit val viewerLeaveSerializer: Serializer[ViewerLeave] = (_: String, data: ViewerLeave) => {
-    writeBinary[ViewerLeave](data)
-  }
-   */
-  implicit val mapPlayerPlayerStateSerializer: Serializer[Map[Player, PlayerState]] = (_: String, data: Map[Player, PlayerState]) => {
-    writeBinary[Map[Player, PlayerState]](data)
-  }
-
-  implicit val viewerJoinSerializer: Serializer[ViewerJoin.type] = (_: String, data: ViewerJoin.type) => {
-    writeBinary[ViewerJoin.type](data)
-  }
-
-  implicit val viewerLeaveSerializer: Serializer[ViewerLeave.type] = (_: String, data: ViewerLeave.type) => {
-    writeBinary[ViewerLeave.type](data)
-  }
-
-  implicit val viewerEventTypeSerializer: Serializer[ViewerEventType] = (_: String, data: ViewerEventType) => {
-    writeBinary[ViewerEventType](data)
-  }
-
   implicit val viewerEventJoinKeySerializer: Serializer[(UUID, ViewerJoin.type)] = (_: String, data: (UUID, ViewerJoin.type)) => {
     writeBinary[(UUID, ViewerJoin.type)](data)
   }
   implicit val viewerEventLeaveKeySerializer: Serializer[(UUID, ViewerLeave.type)] = (_: String, data: (UUID, ViewerLeave.type)) => {
     writeBinary[(UUID, ViewerLeave.type)](data)
   }
-
   implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => {
     writeBinary[PlayersRefresh.type](data)
   }

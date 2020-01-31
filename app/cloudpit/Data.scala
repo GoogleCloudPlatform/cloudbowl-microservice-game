@@ -22,30 +22,24 @@ import play.api.libs.json.Json
 
 import scala.util.Random
 
-case class Arena(path: Arena.Path)
-
 case class Player(service: Player.Service, name: String, pic: URL)
 
 case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean)
 
-// todo: scores
-// todo: on player join, reset scores
-case class Arenas(arenaPlayers: Map[Arena.Path, Map[Player.Service, PlayerState]])
 
 object Arena {
-  implicit val jsWrites = Json.writes[Arena]
   type Path = String
 
   val throwDistance = 3
 
   val fullness = 0.15
-  val aspectRatio = 4 / 3
+  val aspectRatio = 4.0 / 3.0
 
   def dimensions(numPlayers: Int): (Int, Int) = {
     val volume = numPlayers / fullness
     val width = Math.round(Math.sqrt(volume * aspectRatio)).intValue()
-    val height = width * aspectRatio
-    width -> height
+    val height = width / aspectRatio
+    width -> height.toInt
   }
 }
 

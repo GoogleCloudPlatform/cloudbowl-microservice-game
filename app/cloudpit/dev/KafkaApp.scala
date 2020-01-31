@@ -22,7 +22,7 @@ import java.util.{Properties, UUID}
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import cloudpit.Events.{PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
 import cloudpit.KafkaSerialization._
 import cloudpit.{Arena, Kafka, Player, PlayerState, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
@@ -64,7 +64,7 @@ object KafkaConsumerApp extends App {
 
   val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](UUID.randomUUID().toString, Topics.playersRefresh)
 
-  val arenaUpdateSource = Kafka.source[Arena.Path, Map[Player, PlayerState]](UUID.randomUUID().toString, Topics.arenaUpdate)
+  val arenaUpdateSource = Kafka.source[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
 
   viewerEventsSource.merge(playersRefreshSource).merge(arenaUpdateSource).runForeach(println)
 }

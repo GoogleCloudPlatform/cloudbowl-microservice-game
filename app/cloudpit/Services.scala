@@ -36,8 +36,9 @@ object Services {
         else
           Set.fill(Random.nextInt(10) + 1) {
             val name = Random.alphanumeric.take(6).mkString
-            val service = new URL(s"http://localhost:9000/$name")
-            Player(service.toString, name, service)
+            val service = s"http://localhost:9000/$name"
+            val img = new URL(s"https://picsum.photos/seed/$name/40")
+            Player(service, name, img)
           }
       }
     }
