@@ -37,10 +37,11 @@ ARENA/viewerleave/VIEWER
 ARENA/playersrefresh
 ```
 
+```
+./sbt "run 8080"
+```
+
 # TODO
 
-- Request timing
-- Persist players
-- Persist viewers
 - Persist arenas
 - Fan-out battle

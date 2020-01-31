@@ -18,7 +18,7 @@ package cloudpit
 
 import java.net.URL
 
-import play.api.libs.json.Json
+import play.api.libs.json.{JsString, Json, Writes}
 
 import scala.util.Random
 
@@ -45,6 +45,8 @@ object Arena {
 
 object Player {
   type Service = String
+  implicit val urlWrites = Writes[URL](url => JsString(url.toString))
+  implicit val playerWrites = Json.writes[Player]
 }
 
 // todo: encode the circular laws in types

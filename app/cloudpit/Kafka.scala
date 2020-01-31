@@ -21,12 +21,13 @@ import java.net.URL
 import java.util.UUID
 
 import akka.actor.ActorSystem
+import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
 import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
 import org.apache.commons.compress.utils.IOUtils
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer}
@@ -59,6 +60,11 @@ object Kafka {
 
     val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
     Consumer.plainSource(settings, subscription)
+  }
+
+  def committableSource[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[CommittableMessage[K, V], _] = {
+    val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId).withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "latest")
+    Consumer.committableSource(settings, Subscriptions.topics(topic))
   }
 
 }

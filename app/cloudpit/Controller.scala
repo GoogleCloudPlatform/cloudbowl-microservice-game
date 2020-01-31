@@ -16,24 +16,38 @@
 
 package cloudpit
 
-import javax.inject.Inject
+import java.util.UUID
+
+import akka.actor.ActorSystem
+import cloudpit.Events._
+import cloudpit.KafkaSerialization._
+import javax.inject.{Inject, Singleton}
+import play.api.http.ContentTypes
+import play.api.libs.EventSource
+import play.api.libs.json.Json
 import play.api.mvc.InjectedController
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class Controller @Inject()(implicit ec: ExecutionContext) extends InjectedController {
+@Singleton
+class Controller @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
   if (false) {
-    ec
+    (ec, actorSystem)
   }
 
-  def index = Action.async {
-    /*
-    dao.arenas().map { arenas =>
-      Ok(Json.toJson(arenas))
-    }
-     */
-    Future.successful(NotImplemented)
+  def index(arena: Arena.Path) = Action {
+    Ok(views.html.index(arena))
   }
+
+  def updates(arena: Arena.Path) = Action {
+    val arenaUpdateSource = Kafka.committableSource[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+    val arenaSource = arenaUpdateSource.filter(_.record.key() == arena).map { message =>
+      Json.toJson(message.record.value())
+    }.via(EventSource.flow)
+
+    Ok.chunked(arenaSource).as(ContentTypes.EVENT_STREAM)
+  }
+
 
 }

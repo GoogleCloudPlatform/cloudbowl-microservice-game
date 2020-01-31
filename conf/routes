@@ -1,5 +1,8 @@
 # Routes
-GET         /                                                  cloudpit.Controller.index
+GET         /updates/:arena                             cloudpit.Controller.updates(arena)
+
+GET         /:arena                                     cloudpit.Controller.index(arena)
+
 
 # WebJars
 ->          /webjars                                           webjars.Routes

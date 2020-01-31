@@ -1,0 +1,49 @@
+@*
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *@
+
+@(arena: cloudpit.Arena.Path)
+
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Cloud Bowl</title>
+    <style>
+        html {
+            font-family: sans-serif;
+        }
+    </style>
+    <script>
+        if (!!window.EventSource) {
+            const stringSource = new EventSource('@cloudpit.routes.Controller.updates(arena)');
+            stringSource.onopen = () => { };
+            stringSource.onmessage = (message) => {
+                const data = JSON.parse(message.data);
+                console.log(data);
+            };
+
+            stringSource.onerror = (error) => {
+              console.log(error);
+            };
+        }
+        else {
+            // todo
+        }
+    </script>
+</head>
+<body>
+
+</body>
+</html>

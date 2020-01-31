@@ -18,6 +18,8 @@ package cloudpit
 
 import java.util.UUID
 
+import play.api.libs.json._
+
 object Events {
 
   sealed trait ViewerEventType
@@ -40,5 +42,7 @@ object Events {
 
   type ArenaDimsAndPlayers = ((Int, Int), Map[Player, PlayerState])
   type ArenaUpdate = (Arena.Path, ArenaDimsAndPlayers)
+
+  implicit val arenaDimsAndPlayersWrites = Json.writes[ArenaDimsAndPlayers]
 
 }
