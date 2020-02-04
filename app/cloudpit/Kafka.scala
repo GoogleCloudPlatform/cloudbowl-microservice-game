@@ -16,7 +16,6 @@
 
 package cloudpit
 
-import java.io.{File, FileNotFoundException}
 import java.net.URL
 import java.util.UUID
 
@@ -26,13 +25,10 @@ import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
 import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
-import org.apache.commons.compress.utils.IOUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
-
-import scala.concurrent.Future
 
 object Kafka {
 
@@ -85,15 +81,9 @@ object KafkaSerialization {
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
-  //implicit val viewerEventTypeReadWriter: ReadWriter[ViewerEventType] = macroRW
 
 
   implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
-  /*
-  implicit val viewerEventKeyDeserializer: Deserializer[ViewerEvent.Key] = (_: String, data: Array[Byte]) => {
-    readBinary[ViewerEvent.Key](data)
-  }
-   */
   implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => {
     readBinary[PlayersRefresh.type](data)
   }
@@ -108,18 +98,6 @@ object KafkaSerialization {
   implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => {
     writeBinary[ArenaDimsAndPlayers](data)
   }
-  /*
-  // todo: make this work for the subtypes
-  implicit val viewerEventTypeSerializer: Serializer[(UUID, ViewerEventType)] = (_: String, data: (UUID, ViewerEventType)) => {
-    writeBinary[(UUID, ViewerEventType)](data)
-  }
-  implicit val viewerEventJoinSerializer: Serializer[(UUID, ViewerJoin.type)] = (_: String, data: (UUID, ViewerJoin.type)) => {
-    writeBinary[(UUID, ViewerJoin.type)](data)
-  }
-  implicit val viewerEventLeaveSerializer: Serializer[(UUID, ViewerLeave.type)] = (_: String, data: (UUID, ViewerLeave.type)) => {
-    writeBinary[(UUID, ViewerLeave.type)](data)
-  }
-   */
   implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => {
     writeBinary[PlayersRefresh.type](data)
   }

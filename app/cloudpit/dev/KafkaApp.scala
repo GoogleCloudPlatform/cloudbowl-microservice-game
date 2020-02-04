@@ -20,18 +20,15 @@ import java.io.{File, FileOutputStream}
 import java.nio.file.Files
 import java.util.{Properties, UUID}
 
-import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Source
 import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import cloudpit.KafkaSerialization._
-import cloudpit.{Arena, Kafka, Player, PlayerState, Topics}
+import cloudpit.{Arena, Kafka, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.StdIn
 

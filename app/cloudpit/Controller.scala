@@ -19,23 +19,18 @@ package cloudpit
 import java.util.UUID
 
 import akka.NotUsed
-import akka.actor.{ActorRef, ActorSystem}
-import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
-import akka.stream.contrib.PassThroughFlow
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.{Sink, Source}
 import cloudpit.Events._
 import cloudpit.KafkaSerialization._
 import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.Logging
 import play.api.http.ContentTypes
-import play.api.http.HttpEntity.Chunked
 import play.api.libs.EventSource
-import play.api.libs.EventSource.Event
-import play.api.libs.json.{JsNull, JsValue, Json}
-import play.api.mvc.{Filter, InjectedController, RequestHeader, Result}
+import play.api.libs.json.{JsValue, Json}
+import play.api.mvc.InjectedController
 
-import scala.concurrent.{ExecutionContext, Future, TimeoutException}
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 @Singleton
@@ -73,6 +68,5 @@ class Controller @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionConte
 
     Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
   }
-
 
 }
