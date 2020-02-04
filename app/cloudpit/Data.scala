@@ -24,10 +24,11 @@ import scala.util.Random
 
 case class Player(service: Player.Service, name: String, pic: URL)
 
-case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean)
+case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean, score: Int)
 
 
 object Arena {
+  type Name = String
   type Path = String
 
   val throwDistance = 3
@@ -62,11 +63,12 @@ object Direction {
 
   case object E extends Direction
 
-  implicit val nJsonWrites = Json.writes[N.type]
-  implicit val wJsonWrites = Json.writes[W.type]
-  implicit val sJsonWrites = Json.writes[S.type]
-  implicit val eJsonWrites = Json.writes[E.type]
-  implicit val jsonWrites = Json.writes[Direction]
+  implicit val jsonWrites = Writes[Direction] {
+    case N => JsString("N")
+    case W => JsString("W")
+    case S => JsString("S")
+    case E => JsString("E")
+  }
 
   def left(direction: Direction): Direction = {
     direction match {

@@ -109,22 +109,22 @@ object Battle extends App {
     playerService.fetch(record.key()).map(record.key() -> _)
   }
 
-  type ViewersOrPlayers = Either[(Arena.Path, Set[UUID]), (Arena.Path, Set[Player])]
-  type MaybeViewersAndMaybePlayers = (Arena.Path, Option[Set[UUID]], Option[Set[Player]])
-  type ViewersAndPlayers = (Arena.Path, Set[UUID], Set[Player])
+  type ViewersOrPlayers = Either[(Arena.Path, Set[UUID]), (Arena.Path, (Arena.Name, Set[Player]))]
+  type MaybeViewersAndMaybePlayers = (Arena.Path, Option[Set[UUID]], Option[(Arena.Name, Set[Player])])
+  type ViewersAndPlayers = (Arena.Path, Arena.Name, Set[UUID], Set[Player])
 
   def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers): Future[Option[MaybeViewersAndMaybePlayers]] = {
     viewersOrPlayers.fold({ case (arena, viewers) =>
       // We have the viewers, if we don't have the players, fetch them
       arenaViewersAndPlayers.flatMap(_._3).map(Future.successful).getOrElse {
         playerService.fetch(arena)
-      } map { players =>
-        Some((arena, Some(viewers), Some(players)))
+      } map { nameAndPlayers =>
+        Some((arena, Some(viewers), Some(nameAndPlayers)))
       }
-    }, { case (arena, players) =>
+    }, { case (arena, nameAndPlayers) =>
       // We have the players, and maybe the viewers
       Future.successful {
-        Some((arena, arenaViewersAndPlayers.flatMap(_._2), Some(players)))
+        Some((arena, arenaViewersAndPlayers.flatMap(_._2), Some(nameAndPlayers)))
       }
     })
   }
@@ -140,8 +140,8 @@ object Battle extends App {
     val maybe = for {
       arenaViewersAndPlayers <- maybeArenaViewersAndPlayers
       viewers <- arenaViewersAndPlayers._2
-      players <- arenaViewersAndPlayers._3
-    } yield (arenaViewersAndPlayers._1, viewers, players)
+      (name, players) <- arenaViewersAndPlayers._3
+    } yield (arenaViewersAndPlayers._1, name, viewers, players)
 
     maybe.toList
   }
@@ -222,8 +222,8 @@ object Battle extends App {
     val dimensions = Arena.dimensions(players.size)
 
     val board = for {
-      x <- 0 to dimensions._1
-      y <- 0 to dimensions._2
+      x <- 0 until dimensions._1
+      y <- 0 until dimensions._2
     } yield x -> y
 
     val taken = arena.values.map(player => player.x -> player.y)
@@ -232,7 +232,7 @@ object Battle extends App {
 
     val spot = Random.shuffle(open).head
 
-    arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false))
+    arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0))
   }
 
   def forward(playerState: PlayerState, num: Int): (Int, Int) = {
@@ -273,7 +273,11 @@ object Battle extends App {
         val target = forward(playerState, distance)
         val maybeHitPlayer = current.find(isPlayerInPosition(target))
         maybeHitPlayer.fold(current -> false) { case (hitPlayer, hitPlayerState) =>
-          current.updated(hitPlayer, hitPlayerState.copy(wasHit = true)) -> true
+          val updatedPlayerStates = current
+            .updated(hitPlayer, hitPlayerState.copy(wasHit = true, score = hitPlayerState.score - 1))
+            .updated(player, playerState.copy(score = playerState.score + 1))
+
+          updatedPlayerStates -> true
         }
       }
     }._1
@@ -302,10 +306,10 @@ object Battle extends App {
     }
   }
 
-  type ArenaState = (Arena.Path, Set[UUID], Set[Player], Map[Player.Service, PlayerState])
+  type ArenaState = (Arena.Path, Arena.Name, Set[UUID], Set[Player], Map[Player.Service, PlayerState])
 
   def updateArena(current: ArenaState): Future[ArenaState] = {
-    val (arena, viewers, players, state) = current
+    val (arena, name, viewers, players, state) = current
 
     val stateWithGonePlayersRemoved = state.view.filterKeys(players.map(_.service).contains)
 
@@ -340,29 +344,29 @@ object Battle extends App {
 
     val updatedArena = playerMovesFuture.map(performMoves(readyArena))
 
-    updatedArena.map((arena, viewers, players, _))
+    updatedArena.map((arena, name, viewers, players, _))
   }
 
   def arenaStateToArenaUpdate(arenaState: ArenaState): ArenaUpdate = {
-    val playersStates = arenaState._3.flatMap { player =>
-      arenaState._4.get(player.service).map(player -> _)
+    val playersStates = arenaState._4.flatMap { player =>
+      arenaState._5.get(player.service).map(player -> _)
     }.toMap
 
-    arenaState._1 -> (Arena.dimensions(arenaState._3.size) -> playersStates)
+    (arenaState._1, (arenaState._2, Arena.dimensions(arenaState._4.size), playersStates))
   }
 
   def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed)): Future[Option[ArenaState]] = {
     val (viewersAndPlayers, _) = data
 
-    val arenaState = maybeArenaState.flatMap { case (_, _, currentPlayers, playersState) =>
-      if (currentPlayers == viewersAndPlayers._3)
+    val arenaState = maybeArenaState.flatMap { case (_, _, _, currentPlayers, playersState) =>
+      if (currentPlayers == viewersAndPlayers._4)
       // update the viewers
-        Some((viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, playersState))
+        Some((viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, viewersAndPlayers._4, playersState))
       else
       // if the players changes, reinit the playersState
         Option.empty
     } getOrElse {
-      (viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, Map.empty[Player.Service, PlayerState])
+      (viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, viewersAndPlayers._4, Map.empty[Player.Service, PlayerState])
     }
 
     updateArena(arenaState).map(Some(_))

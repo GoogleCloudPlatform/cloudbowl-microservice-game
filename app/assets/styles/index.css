@@ -1,0 +1,82 @@
+html {
+    height: 100%;
+    font-family: monospace;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+}
+
+#title {
+    padding: 10px;
+    font-size: 32pt;
+}
+
+#main {
+    display: flex;
+    height: 100%;
+    padding: 10px;
+}
+
+#arena {
+    width: 80%;
+    height: 100%;
+    display: grid;
+    grid-gap: 1px;
+}
+
+#scoreboard {
+    width: 20%;
+    padding-left: 20px;
+}
+
+#scoreboard > span {
+    font-size: 24pt;
+    font-weight: bold;
+}
+
+.score > img {
+    width: 40px;
+}
+
+.score > .name {
+
+}
+
+.score > .num {
+
+}
+
+.cell {
+    width: 100%;
+    outline: 1px dashed #cccccc;
+}
+
+.pic {
+    object-fit: contain;
+    display: block;
+    height: auto;
+    max-height: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.direction-n {
+    transform:rotate(180deg);
+}
+
+.direction-w {
+    transform:rotate(90deg);
+}
+
+.direction-s {
+    /* no rotate */
+}
+
+.direction-e {
+    transform:rotate(270deg);
+}

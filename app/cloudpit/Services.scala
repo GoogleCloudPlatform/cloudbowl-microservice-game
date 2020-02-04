@@ -24,22 +24,26 @@ import scala.util.Random
 object Services {
 
   trait PlayerService {
-    def fetch(arena: Arena.Path): Future[Set[Player]]
+    def fetch(arena: Arena.Path): Future[(Arena.Name, Set[Player])]
   }
 
   class DevPlayerService extends PlayerService {
 
-    def fetch(arena: Arena.Path): Future[Set[Player]] = {
+    def fetch(arena: Arena.Path): Future[(Arena.Name, Set[Player])] = {
       Future.successful {
-        if (arena == "empty")
-          Set.empty
-        else
-          Set.fill(Random.nextInt(10) + 1) {
+        if (arena == "empty") {
+          ("Empty", Set.empty)
+        }
+        else {
+          val players = Set.fill(Random.nextInt(10) + 1) {
             val name = Random.alphanumeric.take(6).mkString
             val service = s"http://localhost:9000/$name"
-            val img = new URL(s"https://picsum.photos/seed/$name/40")
+            val img = new URL(s"https://picsum.photos/seed/$name/200")
             Player(service, name, img)
           }
+
+          (arena, players)
+        }
       }
     }
 

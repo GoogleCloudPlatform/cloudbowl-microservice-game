@@ -19,31 +19,27 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>Cloud Bowl</title>
-    <style>
-        html {
-            font-family: sans-serif;
-        }
-    </style>
-    <script>
-        if (!!window.EventSource) {
-            const stringSource = new EventSource('@cloudpit.routes.Controller.updates(arena, java.util.UUID.randomUUID)');
-            stringSource.onopen = () => { };
-            stringSource.onmessage = (message) => {
-                const data = JSON.parse(message.data);
-                console.log(data);
-            };
 
-            stringSource.onerror = (error) => {
-              console.log(error);
-            };
-        }
-        else {
-            // todo
-        }
-    </script>
+    <!-- todo
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" href="@routes.Assets.versioned("logo.png")">
+    -->
+
+    <link rel="stylesheet" href="@routes.Assets.versioned("styles/index.css")">
+    <script src="@routes.Assets.versioned("javascripts/index.js")"></script>
 </head>
-<body>
-
+<body data-updatesurl="@cloudpit.routes.Controller.updates(arena, java.util.UUID.randomUUID)">
+    <span id="title"></span>
+    <div id="main">
+        <div id="arena"></div>
+        <div id="scoreboard">
+            <span>High Scores</span>
+        </div>
+    </div>
 </body>
 </html>

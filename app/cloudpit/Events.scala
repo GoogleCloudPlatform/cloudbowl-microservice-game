@@ -16,9 +16,12 @@
 
 package cloudpit
 
+import java.net.URL
 import java.util.UUID
 
+import cloudpit.Direction.Direction
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
 
 object Events {
 
@@ -30,9 +33,34 @@ object Events {
 
   case object PlayersRefresh
 
-  type ArenaDimsAndPlayers = ((Int, Int), Map[Player, PlayerState])
+  type ArenaDimsAndPlayers = (Arena.Name, (Int, Int), Map[Player, PlayerState])
   type ArenaUpdate = (Arena.Path, ArenaDimsAndPlayers)
 
-  implicit val arenaDimsAndPlayersWrites = Json.writes[ArenaDimsAndPlayers]
+  implicit val urlWrites = Writes[URL](url => JsString(url.toString))
+
+  implicit val playerPlayerStateWrites: Writes[(Player, PlayerState)] = (
+    (__ \ "name").write[String] ~
+    (__ \ "pic").write[URL] ~
+    (__ \ "x").write[Int] ~
+    (__ \ "y").write[Int] ~
+    (__ \ "direction").write[Direction] ~
+    (__ \ "wasHit").write[Boolean] ~
+    (__ \ "score").write[Int]
+  ) { playerPlayerState: (Player, PlayerState) =>
+    val (player, playerState) = playerPlayerState
+    (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score)
+  }
+
+  implicit val arenaDimsAndPlayersWrites = (
+    (__ \ "name").write[String] ~
+    (__ \ "width").write[Int] ~
+    (__ \ "height").write[Int] ~
+    (__ \ "players").write[Map[String, (Player, PlayerState)]]
+  ) { arenaDimsAndPlayersWrites: ArenaDimsAndPlayers =>
+    val playerPlayerStates = arenaDimsAndPlayersWrites._3.map { case (player, playerState) =>
+      (player.service, (player, playerState))
+    }
+    (arenaDimsAndPlayersWrites._1, arenaDimsAndPlayersWrites._2._1, arenaDimsAndPlayersWrites._2._2, playerPlayerStates)
+  }
 
 }

@@ -4,5 +4,6 @@ GET         /updates/:arena                             cloudpit.Controller.upda
 GET         /:arena                                     cloudpit.Controller.index(arena)
 
 
-# WebJars
+GET         /assets/*file                               controllers.Assets.versioned(path="/public", file: Asset)
+
 ->          /webjars                                    webjars.Routes

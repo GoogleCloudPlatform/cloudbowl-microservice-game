@@ -43,5 +43,6 @@ ARENA/playersrefresh
 
 # TODO
 
+- Battle hot looping
 - Persist arenas
 - Fan-out battle
