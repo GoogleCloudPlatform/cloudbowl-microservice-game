@@ -25,12 +25,12 @@ import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh, ViewerEvent, ViewerEventType, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import org.apache.commons.compress.utils.IOUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
 
 import scala.concurrent.Future
 
@@ -55,7 +55,7 @@ object Kafka {
   // todo: partitions
   def source[K, V](groupId: String, topic: String, maybeOffset: Option[Long] = None)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], _] = {
     val subscription = maybeOffset.fold[Subscription](Subscriptions.topics(topic)) { offset =>
-      Subscriptions.assignmentWithOffset(new TopicPartition(Topics.viewerEvents, 0), offset)
+      Subscriptions.assignmentWithOffset(new TopicPartition(topic, 0), offset)
     }
 
     val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
@@ -72,7 +72,7 @@ object Kafka {
 object Topics {
 
   val playersRefresh = "playersRefresh"
-  val viewerEvents = "viewerEvents"
+  val viewerPing = "viewerPing"
   val arenaUpdate = "arenaUpdate"
 
 }
@@ -85,108 +85,43 @@ object KafkaSerialization {
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
-  implicit val viewerEventTypeReadWriter: ReadWriter[ViewerEventType] = macroRW
+  //implicit val viewerEventTypeReadWriter: ReadWriter[ViewerEventType] = macroRW
 
 
   implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
+  /*
   implicit val viewerEventKeyDeserializer: Deserializer[ViewerEvent.Key] = (_: String, data: Array[Byte]) => {
     readBinary[ViewerEvent.Key](data)
   }
+   */
   implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => {
     readBinary[PlayersRefresh.type](data)
   }
   implicit val arenaDimsAndPlayersDeserializer: Deserializer[ArenaDimsAndPlayers] = (_: String, data: Array[Byte]) => {
     readBinary[ArenaDimsAndPlayers](data)
   }
+  implicit val uuidDeserializer: Deserializer[UUID] = new UUIDDeserializer
 
 
+  implicit val uuidSerializer: Serializer[UUID] = new UUIDSerializer
   implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
   implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => {
     writeBinary[ArenaDimsAndPlayers](data)
   }
-  implicit val viewerEventJoinKeySerializer: Serializer[(UUID, ViewerJoin.type)] = (_: String, data: (UUID, ViewerJoin.type)) => {
+  /*
+  // todo: make this work for the subtypes
+  implicit val viewerEventTypeSerializer: Serializer[(UUID, ViewerEventType)] = (_: String, data: (UUID, ViewerEventType)) => {
+    writeBinary[(UUID, ViewerEventType)](data)
+  }
+  implicit val viewerEventJoinSerializer: Serializer[(UUID, ViewerJoin.type)] = (_: String, data: (UUID, ViewerJoin.type)) => {
     writeBinary[(UUID, ViewerJoin.type)](data)
   }
-  implicit val viewerEventLeaveKeySerializer: Serializer[(UUID, ViewerLeave.type)] = (_: String, data: (UUID, ViewerLeave.type)) => {
+  implicit val viewerEventLeaveSerializer: Serializer[(UUID, ViewerLeave.type)] = (_: String, data: (UUID, ViewerLeave.type)) => {
     writeBinary[(UUID, ViewerLeave.type)](data)
   }
+   */
   implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => {
     writeBinary[PlayersRefresh.type](data)
-  }
-
-}
-
-object Persistence {
-
-  import java.io.{BufferedInputStream, BufferedOutputStream, FileInputStream, FileOutputStream}
-
-  import upickle.default._
-
-  import scala.util.Try
-
-  trait IO {
-    def save[T](topic: String, key: String, offset: Long, t: T)(implicit writer: Writer[T]): Future[Unit]
-
-    def restore[T](topic: String)(implicit reader: Reader[T]): Future[(Long, Map[String, T])]
-  }
-
-  class FileIO(dir: File) extends IO {
-    if (!dir.exists())
-      dir.mkdirs()
-
-    override def save[T](topic: String, key: String, offset: Long, t: T)(implicit writer: Writer[T]): Future[Unit] = {
-      Future.fromTry {
-        Try {
-          val topicDir = new File(dir, topic)
-          topicDir.mkdirs()
-
-          val tmpFile = new File(topicDir, s"$key.${UUID.randomUUID().toString}")
-
-          val byteArray = writeBinary(offset -> t)
-          val bos = new BufferedOutputStream(new FileOutputStream(tmpFile))
-          bos.write(byteArray)
-          bos.close()
-
-          val permFile = new File(topicDir, key)
-          if (permFile.exists())
-            permFile.delete()
-
-          val worked = tmpFile.renameTo(permFile)
-          if (worked)
-            Future.successful(())
-          else
-            Future.failed(new Exception(s"Could not write $permFile"))
-        }
-      }
-    }
-
-    override def restore[T](topic: String)(implicit reader: Reader[T]): Future[(Long, Map[String, T])] = {
-      val topicDir = new File(dir, topic)
-
-      if (topicDir.exists()) {
-        Future.fromTry {
-          Try {
-            val files = topicDir.listFiles().filter(_.isFile)
-
-            files.foldLeft(0L -> Map.empty[String, T]) { case ((currentOffset, fileContents), file) =>
-              val fis = new FileInputStream(file)
-              val inputStream = new BufferedInputStream(fis)
-              val bytes = IOUtils.toByteArray(inputStream)
-              inputStream.close()
-              fis.close()
-
-              val (offset, t) = readBinary[(Long, T)](bytes)
-
-              val newOffset = Math.max(currentOffset, offset)
-              newOffset -> fileContents.updated(file.getName, t)
-            }
-          }
-        }
-      }
-      else {
-        Future.failed(new FileNotFoundException(s"$topicDir not found"))
-      }
-    }
   }
 
 }

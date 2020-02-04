@@ -18,35 +18,60 @@ package cloudpit
 
 import java.util.UUID
 
-import akka.actor.ActorSystem
+import akka.NotUsed
+import akka.actor.{ActorRef, ActorSystem}
+import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
+import akka.stream.contrib.PassThroughFlow
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import cloudpit.Events._
 import cloudpit.KafkaSerialization._
 import javax.inject.{Inject, Singleton}
+import org.apache.kafka.clients.producer.ProducerRecord
+import play.api.Logging
 import play.api.http.ContentTypes
+import play.api.http.HttpEntity.Chunked
 import play.api.libs.EventSource
-import play.api.libs.json.Json
-import play.api.mvc.InjectedController
+import play.api.libs.EventSource.Event
+import play.api.libs.json.{JsNull, JsValue, Json}
+import play.api.mvc.{Filter, InjectedController, RequestHeader, Result}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
+import scala.concurrent.duration._
 
 @Singleton
 class Controller @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
+  val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
+
+  // wtf compiler
   if (false) {
     (ec, actorSystem)
   }
+  // eowtf
 
   def index(arena: Arena.Path) = Action {
     Ok(views.html.index(arena))
   }
 
-  def updates(arena: Arena.Path) = Action {
-    val arenaUpdateSource = Kafka.committableSource[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
-    val arenaSource = arenaUpdateSource.filter(_.record.key() == arena).map { message =>
-      Json.toJson(message.record.value())
-    }.via(EventSource.flow)
+  def updates(arena: Arena.Path, uuid: UUID) = Action {
+    // todo: one global source and broadcast to all viewers
 
-    Ok.chunked(arenaSource).as(ContentTypes.EVENT_STREAM)
+    val viewerPingSource = Source.repeat(NotUsed).map[ProducerRecord[UUID, Arena.Path]] { _ =>
+      new ProducerRecord(Topics.viewerPing, uuid, arena)
+    }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
+
+    val arenaUpdates: Source[EventSource.Event, _] = {
+      val arenaUpdateSource = Kafka.committableSource[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+      arenaUpdateSource.filter(_.record.key() == arena).map { message =>
+        Json.toJson(message.record.value())
+      }.via(EventSource.flow[JsValue])
+    }
+
+    val source = arenaUpdates.map(Left(_)).merge(viewerPingSource.map(Right(_))).collect {
+      case Left(arenaUpdate) => arenaUpdate
+    }
+
+    Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
   }
 
 

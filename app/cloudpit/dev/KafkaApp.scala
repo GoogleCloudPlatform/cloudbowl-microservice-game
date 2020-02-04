@@ -20,15 +20,19 @@ import java.io.{File, FileOutputStream}
 import java.nio.file.Files
 import java.util.{Properties, UUID}
 
+import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
-import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
+import akka.stream.scaladsl.{Sink, Source}
+import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import cloudpit.KafkaSerialization._
 import cloudpit.{Arena, Kafka, Player, PlayerState, Topics}
 import com.dimafeng.testcontainers.KafkaContainer
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
 
+import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.io.StdIn
 
 object KafkaApp extends App {
@@ -60,7 +64,7 @@ object KafkaApp extends App {
 object KafkaConsumerApp extends App {
   private implicit val actorSystem = ActorSystem()
 
-  val viewerEventsSource = Kafka.source[ViewerEvent.Key, ViewerEvent.Value](UUID.randomUUID().toString, Topics.viewerEvents)
+  val viewerEventsSource = Kafka.source[UUID, Arena.Path](UUID.randomUUID().toString, Topics.viewerPing)
 
   val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](UUID.randomUUID().toString, Topics.playersRefresh)
 
@@ -72,6 +76,7 @@ object KafkaConsumerApp extends App {
 object KafkaProducerApp extends App {
 
   private implicit val actorSystem = ActorSystem()
+  private implicit val ec = actorSystem.dispatcher
 
   Iterator.continually {
     println("Command:")
@@ -84,16 +89,22 @@ object KafkaProducerApp extends App {
       Source.single(record).to(Kafka.sink[K, V]).run()
     }
 
-    line.split("/") match {
-      case Array(arena, "playersrefresh") =>
-        send(Topics.playersRefresh, arena, PlayersRefresh)
-      case Array(arena, "viewerjoin") =>
-        send(Topics.viewerEvents, (UUID.randomUUID(), ViewerJoin), arena)
-      case Array(arena, "viewerleave", id) =>
-        send(Topics.viewerEvents, (UUID.fromString(id), ViewerLeave), arena)
+    if (line.nonEmpty) {
+      line.split("/") match {
+        case Array(arena, "playersrefresh") =>
+          send(Topics.playersRefresh, arena, PlayersRefresh)
 
-      case _ =>
-        println(s"Invalid command: $line")
+        case Array(arena, "viewerjoin") =>
+          val uuid = UUID.randomUUID()
+          println(s"viewer $uuid joining for 1 minute")
+          val cancelable = actorSystem.scheduler.scheduleAtFixedRate(Duration.Zero, 15.seconds) { () =>
+            send(Topics.viewerPing, uuid, arena)
+          }
+          actorSystem.scheduler.scheduleOnce(1.minute)(cancelable.cancel())
+
+        case _ =>
+          println(s"Invalid command: $line")
+      }
     }
 
   }

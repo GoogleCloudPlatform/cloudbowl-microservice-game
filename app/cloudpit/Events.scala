@@ -22,18 +22,8 @@ import play.api.libs.json._
 
 object Events {
 
-  sealed trait ViewerEventType
+  type ViewerPing = UUID
 
-  case object ViewerJoin extends ViewerEventType
-
-  case object ViewerLeave extends ViewerEventType
-
-  case class ViewerEvent(uuid: UUID, viewerEventType: ViewerEventType, arena: Arena.Path)
-
-  object ViewerEvent {
-    type Key = (UUID, ViewerEventType)
-    type Value = Arena.Path
-  }
 
   type ArenaViewers = Map[Arena.Path, Set[UUID]]
 

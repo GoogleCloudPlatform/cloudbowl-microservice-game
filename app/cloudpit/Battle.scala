@@ -24,9 +24,8 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.contrib.PassThroughFlow
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-import cloudpit.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh, ViewerEvent, ViewerJoin, ViewerLeave}
+import cloudpit.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import cloudpit.KafkaSerialization._
-import cloudpit.Persistence.FileIO
 import cloudpit.Services.DevPlayerService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -50,69 +49,60 @@ object Battle extends App {
   // no consumer group partitioning
   val groupId = UUID.randomUUID().toString
 
-  // todo: swappable
-  val io = new FileIO(new File("/tmp/battle"))
 
-  val viewersExisting = io.restore[Set[UUID]](Topics.viewerEvents).recover {
-    case _: FileNotFoundException => 0L -> Map.empty[Arena.Path, Set[UUID]]
-  }
+  val viewerEventsSource = Kafka.source[UUID, Arena.Path](UUID.randomUUID().toString, Topics.viewerPing)
 
-  type InitOrRecord = Either[(Arena.Path, Set[UUID]), ConsumerRecord[ViewerEvent.Key, ViewerEvent.Value]]
+  val tick = Source.repeat(NotUsed).throttle(1, 15.seconds).map(Right(_))
 
-  // todo: periodic persistence
-  val saveViewersFlow = Flow[(Option[Long], Arena.Path, Set[UUID])].mapAsync(1) { case (maybeOffset, arena, viewers) =>
-    maybeOffset.fold(Future.successful(())) { offset =>
-      io.save(Topics.viewerEvents, arena, offset, viewers)
-    }
-  }
+  // keeps track of the viewers
+  // if the message is a ping, we make sure the UUID is in the list of viewers
+  // if the message is not a ping, we check for viewers who have not pinged in 30 seconds and remove them
+  // only emits if the viewers has changed
+  def viewersUpdate(): Either[ConsumerRecord[UUID, Arena.Path], NotUsed] => scala.collection.immutable.Iterable[(Arena.Path, Set[UUID])] = {
+    var maybeArena: Option[Arena.Path] = None
+    val viewers = scala.collection.mutable.Map[UUID, Long]()
 
-  def arenaPathFromInitOrRecord(initOrRecord: InitOrRecord): Arena.Path = {
-    initOrRecord match {
-      case Left(init) => init._1
-      case Right(record) => record.value()
-    }
-  }
+    val noChanges = Seq.empty[(Arena.Path, Set[UUID])]
 
-  def updateViewers(maybeState: Option[(Option[Long], Arena.Path, Set[UUID])], initOrRecord: InitOrRecord): Option[(Option[Long], Arena.Path, Set[UUID])] = {
-    initOrRecord match {
-      case Left(arena -> init) =>
-        Some((None, arena, init))
-      case Right(record) =>
-        val arena = record.value()
-        val viewers = maybeState.map(_._3).getOrElse(Set.empty[UUID])
-        val (viewerId, eventType) = record.key()
+    {
+      case Left(record) =>
+        maybeArena = Some(record.value())
 
-        val updatedViewers = eventType match {
-          case ViewerJoin => viewers + viewerId
-          case ViewerLeave => viewers - viewerId
+        if (viewers.contains(record.key())) {
+          viewers.update(record.key(), System.currentTimeMillis())
+          noChanges
+        }
+        else {
+          viewers += record.key() -> System.currentTimeMillis()
+          Seq(record.value() -> viewers.keySet.toSet)
         }
 
-        Some((Some(record.offset()), arena, updatedViewers))
+      case Right(_) =>
+        maybeArena.fold(noChanges) { arena =>
+          val now = System.currentTimeMillis()
+          val viewersToPurge = viewers.filter { case (_, lastPing) =>
+            lastPing < (now - (1000 * 30))
+          }
+
+          if (viewersToPurge.isEmpty) {
+            noChanges
+          }
+          else {
+            viewers --= viewersToPurge.keys
+            Seq(arena -> viewers.keySet.toSet)
+          }
+        }
     }
   }
 
-  // Get any existing projections
-  // Based on the latest offset of those projections, start there in the stream
-  // Transform the existing projections & events in the stream into a form that can be concatenated
-  // Group the streams by the arena
-  // Fold the existing projections with events
-  // Remove the initial empty emit since `scan` emits with the initial value
-  // Save the updated projection
-  // Ultimately emitting an event for each arena from a projection and any viewer updates following
-  val viewersSource = Source.future(viewersExisting).flatMapConcat { case (initOffset, initViewers) =>
-    val viewerEventsSource = Kafka.source[ViewerEvent.Key, ViewerEvent.Value](groupId, Topics.viewerEvents, Some(initOffset + 1))
-
-    Source(initViewers)
-      .map[InitOrRecord](Left(_))
-      .concat(viewerEventsSource.map[InitOrRecord](Right(_)))
-      .groupBy(Int.MaxValue, arenaPathFromInitOrRecord)
-      .scan(Option.empty[(Option[Long], Arena.Path, Set[UUID])])(updateViewers)
-      .mapConcat(_.toList)
-      .via(PassThroughFlow(saveViewersFlow, Keep.left))
-      .map(viewers => viewers._2 -> viewers._3) // drop the offset
-      .alsoTo(Sink.foreach(println)) // todo: debugging
-      .mergeSubstreams
-  }
+  // todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
+  val viewersSource = viewerEventsSource
+    .groupBy(Int.MaxValue, _.value())
+    .map(Left(_))
+    .merge(tick)
+    .statefulMapConcat(viewersUpdate)
+    .mergeSubstreams
+    //.alsoTo(Sink.foreach(println))
 
   // todo: swappable
   val playerService = new DevPlayerService

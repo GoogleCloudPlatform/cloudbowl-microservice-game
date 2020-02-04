@@ -1,8 +1,8 @@
 # Routes
-GET         /updates/:arena                             cloudpit.Controller.updates(arena)
+GET         /updates/:arena                             cloudpit.Controller.updates(arena, uuid: java.util.UUID)
 
 GET         /:arena                                     cloudpit.Controller.index(arena)
 
 
 # WebJars
-->          /webjars                                           webjars.Routes
+->          /webjars                                    webjars.Routes

@@ -27,7 +27,7 @@
     </style>
     <script>
         if (!!window.EventSource) {
-            const stringSource = new EventSource('@cloudpit.routes.Controller.updates(arena)');
+            const stringSource = new EventSource('@cloudpit.routes.Controller.updates(arena, java.util.UUID.randomUUID)');
             stringSource.onopen = () => { };
             stringSource.onmessage = (message) => {
                 const data = JSON.parse(message.data);

@@ -33,10 +33,10 @@ Run Locally:
 Dev Kafka Event Producer Command Structure:
 ```
 ARENA/viewerjoin
-ARENA/viewerleave/VIEWER
 ARENA/playersrefresh
 ```
 
+1. Start the Viewer web app
 ```
 ./sbt "run 8080"
 ```
