@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cloudpit
+package models
 
 import java.net.URL
 

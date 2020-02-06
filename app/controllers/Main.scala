@@ -14,27 +14,29 @@
  * limitations under the License.
  */
 
-package cloudpit
+package controllers
 
 import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events._
-import cloudpit.KafkaSerialization._
+import models.Events._
+import services.KafkaSerialization._
 import javax.inject.{Inject, Singleton}
+import models.Arena
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.InjectedController
+import services.{Kafka, Topics}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 @Singleton
-class Controller @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
+class Main @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
   val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
 

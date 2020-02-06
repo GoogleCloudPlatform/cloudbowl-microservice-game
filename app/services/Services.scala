@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package cloudpit
+package services
 
 import java.net.URL
+
+import models.{Arena, Player}
 
 import scala.concurrent.Future
 import scala.util.Random

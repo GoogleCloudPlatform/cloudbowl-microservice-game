@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package cloudpit
+package models
 
 import java.net.URL
 import java.util.UUID
 
-import cloudpit.Direction.Direction
-import play.api.libs.json._
+import models.Direction.Direction
+import play.api.libs.json.{JsString, Writes, __}
 import play.api.libs.functional.syntax._
 
 object Events {

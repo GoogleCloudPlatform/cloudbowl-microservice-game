@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cloudpit
+package services
 
 import java.net.URL
 import java.util.UUID
@@ -24,7 +24,8 @@ import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
+import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
+import models.{Arena, Direction, Player, PlayerState}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition

@@ -3,7 +3,7 @@ import play.twirl.sbt.Import.TwirlKeys
 
 enablePlugins(PlayScala, AutomateHeaderPlugin)
 
-name := "cloudpit"
+name := "cloudbowl"
 
 scalaVersion := "2.13.1"
 
@@ -66,8 +66,13 @@ Global / cancelable := false
 organizationName := "Google LLC"
 startYear := Some(2019)
 licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")
-headerMappings += FileType("html") -> HeaderCommentStyle.twirlStyleBlockComment
+headerMappings ++= Map(
+  FileType("html") -> HeaderCommentStyle.twirlStyleBlockComment,
+  FileType("js") -> HeaderCommentStyle.cStyleBlockComment,
+  FileType("css") -> HeaderCommentStyle.cStyleBlockComment,
+)
 Compile / headerSources ++= (Compile / TwirlKeys.compileTemplates / sources).value
+Compile / headerSources ++= (Assets / sources).value
 
 
 // Override logging in test

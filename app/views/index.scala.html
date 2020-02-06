@@ -14,7 +14,7 @@
  * limitations under the License.
  *@
 
-@(arena: cloudpit.Arena.Path)
+@(arena: Arena.Path)
 
 <!doctype html>
 <html lang="en">
@@ -33,7 +33,7 @@
     <link rel="stylesheet" href="@routes.Assets.versioned("styles/index.css")">
     <script src="@routes.Assets.versioned("javascripts/index.js")"></script>
 </head>
-<body data-updatesurl="@cloudpit.routes.Controller.updates(arena, java.util.UUID.randomUUID)">
+<body data-updatesurl="@controllers.routes.Main.updates(arena, java.util.UUID.randomUUID)">
     <span id="title"></span>
     <div id="main">
         <div id="arena"></div>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cloudpit.dev
+package apps.dev
 
 import java.io.{File, FileOutputStream}
 import java.nio.file.Files
@@ -22,12 +22,13 @@ import java.util.{Properties, UUID}
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import cloudpit.Events.{ArenaDimsAndPlayers, PlayersRefresh}
-import cloudpit.KafkaSerialization._
-import cloudpit.{Arena, Kafka, Topics}
+import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
+import services.KafkaSerialization._
 import com.dimafeng.testcontainers.KafkaContainer
+import models.Arena
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
+import services.{Kafka, Topics}
 
 import scala.concurrent.duration._
 import scala.io.StdIn

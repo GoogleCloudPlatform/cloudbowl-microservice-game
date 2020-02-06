@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cloudpit
+package apps
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -22,15 +22,17 @@ import java.util.concurrent.TimeUnit
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import cloudpit.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
-import cloudpit.KafkaSerialization._
-import cloudpit.Services.DevPlayerService
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
+import services.Services.DevPlayerService
+import models.{Arena, Direction, Forward, Move, Player, PlayerState, Throw, TurnLeft, TurnRight}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.Status
 import play.api.libs.json.Json
 import play.api.libs.ws.ahc.{StandaloneAhcWSClient, StandaloneAhcWSResponse}
 import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
+import services.{Kafka, Topics}
+import services.KafkaSerialization._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
