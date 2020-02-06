@@ -1,5 +1,8 @@
-Cloud Pit
----------
+Cloud Bowl
+----------
+
+A microservices battle bowl.
+
 
 Run Locally:
 1. Make sure you have docker installed and running
