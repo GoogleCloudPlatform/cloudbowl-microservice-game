@@ -64,7 +64,7 @@ Global / cancelable := false
 
 // license header stuff
 organizationName := "Google LLC"
-startYear := Some(2019)
+startYear := Some(2020)
 licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")
 headerMappings ++= Map(
   FileType("html") -> HeaderCommentStyle.twirlStyleBlockComment,
