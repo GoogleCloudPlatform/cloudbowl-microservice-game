@@ -73,11 +73,17 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
+
         clear(arena, 'cell');
+        Array.prototype.slice.call(arena.getElementsByClassName('cell')).forEach(cell => cell.className = 'cell');
+
         clear(scoreboard, 'score', true);
 
-        for (const [playerPath, player] of Object.entries(data.players)) {
-          println(player);
+
+        const sortPlayersByScore = (player1, player2) => player2[1].score - player1[1].score;
+
+        for (const [playerPath, player] of Object.entries(data.players).sort(sortPlayersByScore)) {
+          //println(player);
 
           // profile image on grid
           const cell = document.getElementById(player.x + '-' + player.y);
@@ -98,6 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
               break;
           }
           cell.appendChild(img);
+
+          if (player.wasHit) {
+            cell.className = cell.className + " hit";
+          }
 
           // scores
           const scoreLine = document.createElement('div');

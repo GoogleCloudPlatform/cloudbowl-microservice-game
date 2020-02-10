@@ -22,12 +22,12 @@ import java.util.{Properties, UUID}
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
-import services.KafkaSerialization._
 import com.dimafeng.testcontainers.KafkaContainer
 import models.Arena
+import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
+import services.KafkaSerialization._
 import services.{Kafka, Topics}
 
 import scala.concurrent.duration._

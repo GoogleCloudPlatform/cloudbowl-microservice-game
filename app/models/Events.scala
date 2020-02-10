@@ -20,8 +20,8 @@ import java.net.URL
 import java.util.UUID
 
 import models.Direction.Direction
-import play.api.libs.json.{JsString, Writes, __}
 import play.api.libs.functional.syntax._
+import play.api.libs.json.{JsString, Writes, __}
 
 object Events {
 
