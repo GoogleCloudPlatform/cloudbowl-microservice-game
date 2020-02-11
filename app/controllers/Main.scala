@@ -59,9 +59,9 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implici
     }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
 
     val arenaUpdates: Source[EventSource.Event, _] = {
-      val arenaUpdateSource = Kafka.committableSource[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
-      arenaUpdateSource.filter(_.record.key() == arena).map { message =>
-        Json.toJson(message.record.value())
+      val arenaUpdateSource = Kafka.source[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+      arenaUpdateSource.filter(_.key() == arena).map { message =>
+        Json.toJson(message.value())
       }.via(EventSource.flow[JsValue])
     }
 

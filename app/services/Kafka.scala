@@ -20,29 +20,52 @@ import java.net.URL
 import java.util.UUID
 
 import akka.actor.ActorSystem
-import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.kafka.scaladsl.{Consumer, Producer}
-import akka.kafka.{ConsumerSettings, ProducerSettings, Subscription, Subscriptions}
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import models.{Arena, Direction, Player, PlayerState}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
+
+import scala.util.Try
 
 object Kafka {
 
-  def bootstrapServers(implicit actorSystem: ActorSystem): String = {
-    actorSystem.settings.config.getString("kafka.bootstrap.servers")
+  def config: Config = {
+    val baseConfig = ConfigFactory.load()
+
+    val maybeApiKey = Try(baseConfig.getString("kafka.cluster.api.key")).toOption
+    val maybeApiSecret = Try(baseConfig.getString("kafka.cluster.api.secret")).toOption
+
+    (maybeApiKey, maybeApiSecret) match {
+      case (Some(apiKey), Some(apiSecret)) =>
+        val saslJaasConfig = s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$apiKey" password="$apiSecret";"""
+        baseConfig
+          .withValue("kafka-clients.security.protocol", ConfigValueFactory.fromAnyRef("SASL_SSL"))
+          .withValue("kafka-clients.sasl.mechanism", ConfigValueFactory.fromAnyRef("PLAIN"))
+          .withValue("kafka-clients.sasl.jaas.config", ConfigValueFactory.fromAnyRef(saslJaasConfig))
+      case _ =>
+        baseConfig
+    }
+  }
+
+  def consumerConfig(implicit actorSystem: ActorSystem): Config = {
+    config.withFallback(actorSystem.settings.config.getConfig(ConsumerSettings.configPath))
+  }
+
+  def producerConfig(implicit actorSystem: ActorSystem): Config = {
+    config.withFallback(actorSystem.settings.config.getConfig(ProducerSettings.configPath))
   }
 
   def producerSettings[K, V](keySerializer: Serializer[K], valueSerializer: Serializer[V])(implicit actorSystem: ActorSystem): ProducerSettings[K, V] = {
-    ProducerSettings(actorSystem, keySerializer, valueSerializer).withBootstrapServers(bootstrapServers)
+    ProducerSettings(producerConfig, keySerializer, valueSerializer)
   }
 
   def consumerSettings[K, V](keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V])(implicit actorSystem: ActorSystem): ConsumerSettings[K, V] = {
-    ConsumerSettings(actorSystem, keyDeserializer, valueDeserializer).withBootstrapServers(bootstrapServers)
+    ConsumerSettings(consumerConfig, keyDeserializer, valueDeserializer)
   }
 
   def sink[K, V](implicit actorSystem: ActorSystem, keySerializer: Serializer[K], valueSerializer: Serializer[V]): Sink[ProducerRecord[K, V], _] = {
@@ -50,18 +73,10 @@ object Kafka {
   }
 
   // todo: partitions
-  def source[K, V](groupId: String, topic: String, maybeOffset: Option[Long] = None)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], _] = {
-    val subscription = maybeOffset.fold[Subscription](Subscriptions.topics(topic)) { offset =>
-      Subscriptions.assignmentWithOffset(new TopicPartition(topic, 0), offset)
-    }
-
+  def source[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], _] = {
+    val subscription = Subscriptions.topics(topic)
     val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
     Consumer.plainSource(settings, subscription)
-  }
-
-  def committableSource[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[CommittableMessage[K, V], _] = {
-    val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId).withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "latest")
-    Consumer.committableSource(settings, Subscriptions.topics(topic))
   }
 
 }

@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{Flow, Source}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import models.{Arena, Direction, Forward, Move, Player, PlayerState, Throw, TurnLeft, TurnRight}
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -102,7 +102,6 @@ object Battle extends App {
     .merge(tick)
     .statefulMapConcat(viewersUpdate)
     .mergeSubstreams
-    //.alsoTo(Sink.foreach(println))
 
   // todo: better
   val playerService = {
@@ -390,8 +389,6 @@ object Battle extends App {
     .mapConcat(_.toList)
     .throttle(1, 1.second)
     .map(arenaStateToArenaUpdate)
-    .alsoTo(Sink.foreach(println)) // todo: debugging
-
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
     new ProducerRecord(Topics.arenaUpdate, arenaUpdate._1, arenaUpdate._2)
@@ -400,7 +397,9 @@ object Battle extends App {
   val arenaUpdateSink = Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
 
   viewersAndPlayersSource
+    .log("viewersAndPlayers")
     .via(arenaUpdateFlow)
+    .log("arenaUpdate")
     .map(arenaUpdateToProducerRecord)
     .to(arenaUpdateSink)
     .run()

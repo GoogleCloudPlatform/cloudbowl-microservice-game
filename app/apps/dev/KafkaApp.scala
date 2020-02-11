@@ -47,7 +47,7 @@ object KafkaApp extends App {
   Files.createDirectories(destination.getParentFile.toPath)
 
   val props = new Properties()
-  props.setProperty("kafka.bootstrap.servers", container.bootstrapServers)
+  props.setProperty("kafka-clients.bootstrap.servers", container.bootstrapServers)
 
   val fos = new FileOutputStream(destination)
 
