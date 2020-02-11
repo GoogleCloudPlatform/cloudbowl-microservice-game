@@ -34,9 +34,9 @@ Run Locally:
     ```
 1. Start the Viewer web app
     ```
-    ./sbt "run 8080"
+    ./sbt run
     ```
-    Check out the *foo* arena: [http://localhost:8080/foo](http://localhost:8080/foo)
+    Check out the *foo* arena: [http://localhost:9000/foo](http://localhost:9000/foo)
 
 # TODO
 
