@@ -64,7 +64,7 @@ class GoogleSheetPlayersConfig @Inject()(configuration: Configuration) {
   val maybeId = configuration.getOptional[String]("players.sheet.id").filter(_.nonEmpty)
   val maybeName = configuration.getOptional[String]("players.sheet.name").filter(_.nonEmpty)
 
-  val isConfigured = maybePrivateKeyId.isDefined && maybePrivateKey.isDefined && maybeClientEmail.isDefined && maybePsk.isDefined && maybeId.isDefined && maybeName.isDefined
+  val isConfigured = maybePrivateKeyId.isDefined && maybePrivateKey.isDefined && maybeClientEmail.isDefined && maybeId.isDefined && maybeName.isDefined
 }
 
 class GoogleSheetPlayers @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, wsClient: StandaloneWSClient)(implicit ec: ExecutionContext) extends Players {
