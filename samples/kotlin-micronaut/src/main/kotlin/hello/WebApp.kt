@@ -39,7 +39,7 @@ data class ArenaUpdate(val _links: Links, val arena: Arena)
 @Controller
 class WebApp {
 
-    @Post("/{+path}")
+    @Post(uris = ["/", "/{+path}"])
     fun index(@Body maybeArenaUpdate: Single<ArenaUpdate>): Single<String> {
         return maybeArenaUpdate.map { arenaUpdate ->
             println(arenaUpdate)
