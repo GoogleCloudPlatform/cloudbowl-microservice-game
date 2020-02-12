@@ -80,15 +80,13 @@ class GoogleSheetPlayers @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersC
   val id = googleSheetPlayersConfig.maybeId.get
   val name = googleSheetPlayersConfig.maybeName.get
 
-
   implicit val clock: Clock = Clock.systemUTC
 
-  val header = JwtHeader(JwtAlgorithm.RS256).withKeyId(privateKeyId)
-  val claim = JwtClaim().by(clientEmail).about(clientEmail).to("https://sheets.googleapis.com/").issuedNow.expiresIn(60L)
-  val token = Jwt.encode(header, claim, privateKey)
-
-
   def fetch(arena: Arena.Path): Future[(Arena.Name, Set[Player])] = {
+    val header = JwtHeader(JwtAlgorithm.RS256).withKeyId(privateKeyId)
+    val claim = JwtClaim().by(clientEmail).about(clientEmail).to("https://sheets.googleapis.com/").issuedNow.expiresIn(60L)
+    val token = Jwt.encode(header, claim, privateKey)
+
     val url = s"https://sheets.googleapis.com/v4/spreadsheets/$id/values/$name"
     wsClient.url(url).withHttpHeaders(HeaderNames.AUTHORIZATION -> s"Bearer $token").get().flatMap { response =>
       response.status match {
