@@ -1,1 +1,1 @@
-web: build/install/hello-micronaut/bin/hello-micronaut
+web: build/install/cloudbowl-kotlin-micronaut/bin/cloudbowl-kotlin-micronaut
