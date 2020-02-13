@@ -18,9 +18,7 @@
 
     <logger name="play" level="INFO" />
     <logger name="application" level="DEBUG" />
-    <logger name="com.github.mauricio.async.db.postgresql.codec" level="ERROR" />
-    <logger name="com.zaxxer.hikari" level="ERROR" />
-    <logger name="org.apache.kafka" level="ERROR" />
+    <logger name="org.apache.kafka" level="INFO" />
 
     <root>
         <appender-ref ref="ASYNCSTDOUT" />

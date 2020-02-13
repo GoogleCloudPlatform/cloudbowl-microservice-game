@@ -21,18 +21,18 @@ import java.util.concurrent.TimeUnit
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{Flow, Source}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
-import services.Services.DevPlayerService
 import models.{Arena, Direction, Forward, Move, Player, PlayerState, Throw, TurnLeft, TurnRight}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
+import play.api.Configuration
 import play.api.http.Status
 import play.api.libs.json.Json
 import play.api.libs.ws.ahc.{StandaloneAhcWSClient, StandaloneAhcWSResponse}
 import play.api.libs.ws.{WSRequestExecutor, WSRequestFilter}
-import services.{Kafka, Topics}
 import services.KafkaSerialization._
+import services.{DevPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Topics}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -102,10 +102,16 @@ object Battle extends App {
     .merge(tick)
     .statefulMapConcat(viewersUpdate)
     .mergeSubstreams
-    //.alsoTo(Sink.foreach(println))
 
-  // todo: swappable
-  val playerService = new DevPlayerService
+  // todo: better
+  val playerService = {
+    val googleSheetPlayerService = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
+    if (googleSheetPlayerService.isConfigured)
+      new GoogleSheetPlayers(googleSheetPlayerService, wsClient)
+    else
+      new DevPlayers
+  }
+
 
   val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
     playerService.fetch(record.key()).map(record.key() -> _)
@@ -377,13 +383,12 @@ object Battle extends App {
   // todo: currently no persistence of ArenaState so it is lost on restart
   val arenaUpdateFlow = Flow[ViewersAndPlayers]
     .zipLatest(Source.repeat(NotUsed))
-    .filter(_._1._2.nonEmpty) // only arenas with viewers
+    .filter(_._1._3.nonEmpty) // only arenas with viewers
+    .filter(_._1._4.nonEmpty) // only arenas with players
     .scanAsync(Option.empty[ArenaState])(performArenaUpdate)
     .mapConcat(_.toList)
     .throttle(1, 1.second)
     .map(arenaStateToArenaUpdate)
-    .alsoTo(Sink.foreach(println)) // todo: debugging
-
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
     new ProducerRecord(Topics.arenaUpdate, arenaUpdate._1, arenaUpdate._2)
@@ -392,7 +397,9 @@ object Battle extends App {
   val arenaUpdateSink = Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
 
   viewersAndPlayersSource
+    .log("viewersAndPlayers")
     .via(arenaUpdateFlow)
+    .log("arenaUpdate")
     .map(arenaUpdateToProducerRecord)
     .to(arenaUpdateSink)
     .run()

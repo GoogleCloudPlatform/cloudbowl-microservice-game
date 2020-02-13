@@ -21,23 +21,24 @@ import java.util.UUID
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
-import models.Events._
-import services.KafkaSerialization._
 import javax.inject.{Inject, Singleton}
 import models.Arena
+import models.Events._
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.InjectedController
-import services.{Kafka, Topics}
+import services.KafkaSerialization._
+import services.{GoogleSheetPlayersConfig, Kafka, Topics}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 @Singleton
-class Main @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
+class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
+  val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
   val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
 
   // wtf compiler
@@ -58,9 +59,9 @@ class Main @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) ex
     }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
 
     val arenaUpdates: Source[EventSource.Event, _] = {
-      val arenaUpdateSource = Kafka.committableSource[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
-      arenaUpdateSource.filter(_.record.key() == arena).map { message =>
-        Json.toJson(message.record.value())
+      val arenaUpdateSource = Kafka.source[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+      arenaUpdateSource.filter(_.key() == arena).map { message =>
+        Json.toJson(message.value())
       }.via(EventSource.flow[JsValue])
     }
 
@@ -69,6 +70,17 @@ class Main @Inject()(implicit actorSystem: ActorSystem, ec: ExecutionContext) ex
     }
 
     Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
+  }
+
+  def playersRefresh(arena: Arena.Path) = Action { request =>
+    if (request.headers.get(AUTHORIZATION).contains(googleSheetPlayersConfig.maybePsk.get)) {
+      val record = new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
+      Source.single(record).to(playersRefreshSink).run()
+      NoContent
+    }
+    else {
+      Unauthorized
+    }
   }
 
 }

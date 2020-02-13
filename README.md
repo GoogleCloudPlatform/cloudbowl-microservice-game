@@ -12,7 +12,7 @@ Run Locally:
     ```
 1. Start the Battle
     ```
-    ./sbt "runMain cloudpit.Battle"
+    ./sbt "runMain apps.Battle"
     ```
 1. Start the apps.dev Kafka event viewer
     ```
@@ -27,25 +27,20 @@ Run Locally:
     ```
     ./sbt "runMain apps.dev.KafkaProducerApp"
     ```
-1. In the apps.dev Kafka event producer app have a viewer join the `foo` arena:
+    You can send commands like
     ```
-    foo/viewerjoin
+    ARENA/viewerjoin
+    ARENA/playersrefresh
     ```
-1. Watch the apps.dev Kafka event viewer
-
-Dev Kafka Event Producer Command Structure:
-```
-ARENA/viewerjoin
-ARENA/playersrefresh
-```
-
 1. Start the Viewer web app
-```
-./sbt "run 8080"
-```
+    ```
+    ./sbt run
+    ```
+    Check out the *foo* arena: [http://localhost:9000/foo](http://localhost:9000/foo)
 
 # TODO
 
+- Arena Peach or Something else
 - Battle hot looping
 - Persist arenas
 - Fan-out battle

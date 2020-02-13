@@ -38,14 +38,14 @@ body {
 }
 
 #arena {
-    width: 80%;
+    width: 100%;
     height: 100%;
     display: grid;
     grid-gap: 1px;
 }
 
 #scoreboard {
-    width: 20%;
+    width: 300px;
     padding-left: 20px;
 }
 
@@ -54,16 +54,30 @@ body {
     font-weight: bold;
 }
 
+.score {
+    display: flex;
+    padding: 10px;
+}
+
 .score > img {
     width: 40px;
+    padding-right: 10px;
 }
 
 .score > .name {
-
+    width: 100%;
+    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-right: 10px;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .score > .num {
-
+    width: 20px;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .cell {
@@ -74,7 +88,7 @@ body {
 .pic {
     object-fit: contain;
     display: block;
-    height: auto;
+    height: 100%;
     max-height: 100%;
     max-width: 100%;
     margin-left: auto;
@@ -95,4 +109,23 @@ body {
 
 .direction-e {
     transform:rotate(270deg);
+}
+
+.hit {
+    position: relative;
+}
+
+.hit:after {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-image: url("https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f351.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    opacity: 0.7;
 }
