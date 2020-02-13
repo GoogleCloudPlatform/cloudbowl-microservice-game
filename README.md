@@ -1,7 +1,7 @@
 Cloud Bowl
 ----------
 
-A microservices battle bowl.
+A game where microservices battle each other in a giant real-time bowl.
 
 
 Run Locally:
