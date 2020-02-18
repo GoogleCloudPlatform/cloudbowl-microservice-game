@@ -1,4 +1,7 @@
-# Cloud Bowl - Kotlin Micronaut
+Cloud Bowl Sample - Kotlin Micronaut
+------------------------------------
+
+To make changes, edit the `src/main/kotlin/hello/WebApp.kt` file.
 
 Run Locally:
 ```

@@ -1,5 +1,7 @@
-Cloud Bowl - Samples Java SpringBoot
-------------------------------------
+Cloud Bowl Sample - Java SpringBoot
+-----------------------------------
+
+To make changes, edit the `src/main/java/hello/Application.java` file.
 
 Run Locally:
 ```
