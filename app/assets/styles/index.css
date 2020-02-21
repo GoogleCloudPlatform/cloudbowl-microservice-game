@@ -46,7 +46,7 @@ body {
 
 #scoreboard {
     width: 300px;
-    height: 300px; // hacky hacky workaroundy
+    height: 300px; /* hacky hacky workaroundy */
     padding-left: 20px;
 }
 
