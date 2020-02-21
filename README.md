@@ -44,3 +44,5 @@ Run Locally:
 - Battle hot looping
 - Persist arenas
 - Fan-out battle
+- Response times in player list
+- Local dev instructions
