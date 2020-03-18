@@ -1,0 +1,3 @@
+steps:
+- name: 'gcr.io/cloudrun/pack'
+  args: ['build', '--builder=heroku/buildpacks:18', '--path', 'samples/kotlin-quarkus', '--publish', 'gcr.io/$PROJECT_ID/$REPO_NAME-samples-kotlin-quarkus:$COMMIT_SHA']
