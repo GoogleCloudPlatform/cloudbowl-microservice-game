@@ -26,9 +26,9 @@ fun main() {
     Micronaut.run(WebApp::class.java)
 }
 
-data class Self(val href: String)
+inline class Self(val href: String)
 
-data class Links(val self: Self)
+inline class Links(val self: Self)
 
 data class PlayerState(val x: Int, val y: Int, val direction: String, val wasHit: Boolean, val score: Int)
 
