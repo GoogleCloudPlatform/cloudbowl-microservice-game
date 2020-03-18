@@ -11,6 +11,7 @@ Run Locally:
     ./sbt "runMain apps.dev.KafkaApp"
     ```
 1. Start the Battle
+    TODO: player backends
     ```
     ./sbt "runMain apps.Battle"
     ```
@@ -37,6 +38,29 @@ Run Locally:
     ./sbt run
     ```
     Check out the *foo* arena: [http://localhost:9000/foo](http://localhost:9000/foo)
+
+
+Testing:
+
+For GitHub Player backend:
+
+1. Create a GitHub App with perm *Contents - Read-Only*
+1. Generate a private key
+1. `export GITHUB_APP_PRIVATE_KEY=$(cat ~/somewhere/your-integration.2017-02-07.private-key.pem)`
+1. `export GITHUB_APP_ID=YOUR_NUMERIC_GITHUB_APP_ID`
+1. `export GITHUB_ORGREPO=cloudbowl/arenas`
+1. Run the tests:
+    ```
+    ./sbt test
+    ```
+
+For Google Sheets Player backend:
+1. TODO
+
+
+Prod:
+1. TODO
+
 
 # TODO
 

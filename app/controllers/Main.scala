@@ -18,7 +18,6 @@ package controllers
 
 import java.util.UUID
 
-import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import javax.inject.{Inject, Singleton}

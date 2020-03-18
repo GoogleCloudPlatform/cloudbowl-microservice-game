@@ -123,7 +123,8 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    background-image: url("https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f351.png");
+    /* background-image: url("https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f351.png"); */
+    background-image: var(--emoji);
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;

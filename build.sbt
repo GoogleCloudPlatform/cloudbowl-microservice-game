@@ -16,13 +16,13 @@ libraryDependencies ++= Seq(
 
   "org.webjars"            %% "webjars-play"                    % "2.8.0",
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.1",
+  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.2",
   "com.typesafe.akka"      %% "akka-stream-contrib"             % "0.11",
-  "com.lihaoyi"            %% "upickle"                         % "0.9.5",
+  "com.lihaoyi"            %% "upickle"                         % "1.0.0",
 
-  "com.pauldijou"          %% "jwt-core"                        % "4.2.0",
+  "com.pauldijou"          %% "jwt-core"                        % "4.3.0",
 
-  "com.dimafeng"           %% "testcontainers-scala-kafka"      % "0.34.3",
+  "com.dimafeng"           %% "testcontainers-scala-kafka"      % "0.36.1",
   "org.scalatestplus.play" %% "scalatestplus-play"              % "5.0.0" % "test"
 )
 

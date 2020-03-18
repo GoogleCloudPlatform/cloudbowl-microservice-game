@@ -19,6 +19,7 @@ package models
 import java.net.URL
 import java.util.UUID
 
+import models.Arena.ArenaState
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import play.api.test.Helpers._
 
@@ -35,7 +36,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
       val player = Player("http://foo", "foo", new URL("http://foo"))
       val playerState = PlayerState(0, 0, Direction.S, true, 0)
-      val initState = ("test", "test", Set.empty[UUID], Set(player), Map(player.service -> playerState))
+      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player), Map(player.service -> playerState))
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -51,7 +52,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState._5(player.service).y must equal (1)
+      newState.playerStates(player.service).y must equal (1)
     }
   }
 
@@ -62,7 +63,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
       val player1State = PlayerState(0, 0, Direction.S, true, 0)
       val player2State = PlayerState(0, 1, Direction.N, false, 0)
 
-      val initState = ("test", "test", Set.empty[UUID], Set(player1, player2), Map(player1.service -> player1State, player2.service -> player2State))
+      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2), Map(player1.service -> player1State, player2.service -> player2State))
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -78,8 +79,8 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState._5(player1.service).wasHit must equal (false)
-      newState._5(player2.service).wasHit must equal (true)
+      newState.playerStates(player1.service).wasHit must equal (false)
+      newState.playerStates(player2.service).wasHit must equal (true)
     }
   }
 

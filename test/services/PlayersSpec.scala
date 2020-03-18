@@ -36,10 +36,29 @@ class PlayersSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
   "googlesheets" must {
     "work" in {
       val config = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
-      val googleSheetPlayers = new GoogleSheetPlayers(config, wsClient)
+      if (config.isConfigured) {
+        val googleSheetPlayers = new GoogleSheetPlayers(config, wsClient)
 
-      val players = await(googleSheetPlayers.fetch("test"))
-      players._2 must not be empty
+        val arenaConfigAndPlayers = await(googleSheetPlayers.fetch("test"))
+        arenaConfigAndPlayers.players must not be empty
+      }
+      else {
+        cancel("required config not set")
+      }
+    }
+  }
+
+  "github" must {
+    "work" in {
+      val config = new GitHubPlayersConfig(Configuration(actorSystem.settings.config))
+      if (config.isConfigured) {
+        val gitHubPlayers = new GitHubPlayers(config, wsClient)
+        val arenaConfigAndPlayers = await(gitHubPlayers.fetch("test"))
+        arenaConfigAndPlayers.players must not be empty
+      }
+      else {
+        cancel("required config not set")
+      }
     }
   }
 

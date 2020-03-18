@@ -24,6 +24,7 @@ import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import models.Arena.Dimensions
 import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import models.{Arena, Direction, Player, PlayerState}
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -97,6 +98,8 @@ object KafkaSerialization {
   implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
   implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
   implicit val playerReadWriter: ReadWriter[Player] = macroRW
+  implicit val dimensionsWriter: ReadWriter[Dimensions] = macroRW
+  implicit val arenaDimsAndPlayersWriter: ReadWriter[ArenaDimsAndPlayers] = macroRW
 
 
   implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer

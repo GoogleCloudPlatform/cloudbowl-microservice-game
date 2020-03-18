@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import models.Events.{ArenaUpdate, PlayersRefresh}
+import akka.stream.scaladsl.Source
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.Deserializer
 import play.api.Configuration
@@ -30,7 +31,7 @@ import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.StandaloneAhcWSResponse
 import play.api.libs.ws.{StandaloneWSClient, WSRequestExecutor, WSRequestFilter}
-import services.{DevPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Topics}
+import services.{DevPlayers, GitHubPlayers, GitHubPlayersConfig, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
@@ -52,32 +53,38 @@ object Arena {
 
   type Name = String
   type Path = String
+  type EmojiCode = String
 
   // todo: refactor to case classes
-  type ViewersOrPlayers = Either[(Path, Set[UUID]), (Path, (Name, Set[Player]))]
-  type MaybeViewersAndMaybePlayers = (Path, Option[Set[UUID]], Option[(Name, Set[Player])])
-  type ViewersAndPlayers = (Path, Name, Set[UUID], Set[Player])
-  type ArenaState = (Path, Name, Set[UUID], Set[Player], Map[Player.Service, PlayerState])
+  case class PathedViewers(path: Path, viewers: Set[UUID])
+  case class PathedPlayers(path: Path, players: Set[Player])
+  case class ArenaConfigAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, players: Set[Player])
+  type ViewersOrPlayers = Either[PathedViewers, ArenaConfigAndPlayers]
+  case class MaybeViewersAndMaybePlayers(path: Path, maybeViewers: Option[Set[UUID]], maybeArenaConfigAndPlayers: Option[ArenaConfigAndPlayers])
+  case class ViewersAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player])
+  case class ArenaState(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player], playerStates: Map[Player.Service, PlayerState])
 
   case class ResponseWithDuration(response: play.shaded.ahc.org.asynchttpclient.Response, duration: FiniteDuration) extends StandaloneAhcWSResponse(response)
 
+  case class Position(x: Int, y: Int)
+  case class Dimensions(width: Int, height: Int)
 
-  def calcDimensions(numPlayers: Int): (Int, Int) = {
+  def calcDimensions(numPlayers: Int): Dimensions = {
     val volume = numPlayers / fullness
     val width = Math.round(Math.sqrt(volume * aspectRatio)).intValue()
     val height = width / aspectRatio
-    width -> height.toInt
+    Dimensions(width, height.toInt)
   }
 
   // keeps track of the viewers
   // if the message is a ping, we make sure the UUID is in the list of viewers
   // if the message is not a ping, we check for viewers who have not pinged in 30 seconds and remove them
   // only emits if the viewers has changed
-  def viewersUpdate(): Either[ConsumerRecord[UUID, Path], NotUsed] => scala.collection.immutable.Iterable[(Path, Set[UUID])] = {
+  def viewersUpdate(): Either[ConsumerRecord[UUID, Path], NotUsed] => scala.collection.immutable.Iterable[PathedViewers] = {
     var maybeArena: Option[Path] = None
     val viewers = scala.collection.mutable.Map[UUID, Long]()
 
-    val noChanges = Seq.empty[(Path, Set[UUID])]
+    val noChanges = Seq.empty[PathedViewers]
 
     {
       case Left(record) =>
@@ -89,7 +96,7 @@ object Arena {
         }
         else {
           viewers += record.key() -> System.currentTimeMillis()
-          Seq(record.value() -> viewers.keySet.toSet)
+          Seq(PathedViewers(record.value(), viewers.keySet.toSet))
         }
 
       case Right(_) =>
@@ -104,57 +111,60 @@ object Arena {
           }
           else {
             viewers --= viewersToPurge.keys
-            Seq(arena -> viewers.keySet.toSet)
+            Seq(PathedViewers(arena, viewers.keySet.toSet))
           }
         }
     }
   }
 
   // todo: better
-  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient) = {
-    val googleSheetPlayerService = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
-    if (googleSheetPlayerService.isConfigured)
-      new GoogleSheetPlayers(googleSheetPlayerService, wsClient)
+  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient): Players = {
+    val googleSheetPlayersConfig = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
+    val gitHubPlayersConfig = new GitHubPlayersConfig(Configuration(actorSystem.settings.config))
+    if (googleSheetPlayersConfig.isConfigured)
+      new GoogleSheetPlayers(googleSheetPlayersConfig, wsClient)
+    else if (gitHubPlayersConfig.isConfigured)
+      new GitHubPlayers(gitHubPlayersConfig, wsClient)
     else
       new DevPlayers
   }
 
 
-  def playersRefreshSource(groupId: String)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient, keyDeserializer: Deserializer[Path], valueDeserializer: Deserializer[Events.PlayersRefresh.type]) = {
+  def playersRefreshSource(groupId: String)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient, keyDeserializer: Deserializer[Path], valueDeserializer: Deserializer[Events.PlayersRefresh.type]): Source[ArenaConfigAndPlayers, _] = {
     Kafka.source[Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
-      playerService.fetch(record.key()).map(record.key() -> _)
+      playerService.fetch(record.key())
     }
   }
 
   def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient): Future[Option[MaybeViewersAndMaybePlayers]] = {
-    viewersOrPlayers.fold({ case (arena, viewers) =>
+    viewersOrPlayers.fold({ pathedViewers =>
       // We have the viewers, if we don't have the players, fetch them
-      arenaViewersAndPlayers.flatMap(_._3).map(Future.successful).getOrElse {
-        playerService.fetch(arena)
-      } map { nameAndPlayers =>
-        Some((arena, Some(viewers), Some(nameAndPlayers)))
+      arenaViewersAndPlayers.flatMap(_.maybeArenaConfigAndPlayers).map(Future.successful).getOrElse {
+        playerService.fetch(pathedViewers.path)
+      } map { arenaConfigAndPlayers =>
+        Some(MaybeViewersAndMaybePlayers(pathedViewers.path, Some(pathedViewers.viewers), Some(arenaConfigAndPlayers)))
       }
-    }, { case (arena, nameAndPlayers) =>
+    }, { arenaConfigAndPlayers =>
       // We have the players, and maybe the viewers
       Future.successful {
-        Some((arena, arenaViewersAndPlayers.flatMap(_._2), Some(nameAndPlayers)))
+        Some(MaybeViewersAndMaybePlayers(arenaConfigAndPlayers.path, arenaViewersAndPlayers.flatMap(_.maybeViewers), Some(arenaConfigAndPlayers)))
       }
     })
   }
 
   def arenaPathFromViewerOrPlayers(viewersOrPlayers: ViewersOrPlayers): Path = {
     viewersOrPlayers match {
-      case Left((arena, _)) => arena
-      case Right((arena, _)) => arena
+      case Left(PathedViewers(path, _)) => path
+      case Right(ArenaConfigAndPlayers(path, _, _, _)) => path
     }
   }
 
   def onlyArenasWithViewersAndPlayers(maybeArenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers]): scala.collection.immutable.Iterable[ViewersAndPlayers] = {
     val maybe = for {
       arenaViewersAndPlayers <- maybeArenaViewersAndPlayers
-      viewers <- arenaViewersAndPlayers._2
-      (name, players) <- arenaViewersAndPlayers._3
-    } yield (arenaViewersAndPlayers._1, name, viewers, players)
+      viewers <- arenaViewersAndPlayers.maybeViewers
+      ArenaConfigAndPlayers(_, name, emojiCode, players) <- arenaViewersAndPlayers.maybeArenaConfigAndPlayers
+    } yield ViewersAndPlayers(arenaViewersAndPlayers.path, name, emojiCode, viewers, players)
 
     maybe.toList
   }
@@ -183,6 +193,8 @@ object Arena {
   def playerMoveWs(arena: Map[Player.Service, PlayerState], player: Player)(implicit ec: ExecutionContext, wsClient: StandaloneWSClient): Future[Option[(Move, FiniteDuration)]] = {
     implicit val playerStateWrites = PlayerState.jsonWrites
 
+    val dims = calcDimensions(arena.keys.size)
+
     val json = Json.obj(
       "_links" -> Json.obj(
         "self" -> Json.obj(
@@ -190,7 +202,7 @@ object Arena {
         )
       ),
       "arena" -> Json.obj(
-        "dims" -> calcDimensions(arena.keys.size),
+        "dims" -> Array(dims.width, dims.height),
         "state" -> Json.toJson(arena)
       )
     )
@@ -227,8 +239,8 @@ object Arena {
     val dimensions = calcDimensions(players.size)
 
     val board = for {
-      x <- 0 until dimensions._1
-      y <- 0 until dimensions._2
+      x <- 0 until dimensions.width
+      y <- 0 until dimensions.height
     } yield x -> y
 
     val taken = arena.values.map(player => player.x -> player.y)
@@ -240,17 +252,17 @@ object Arena {
     arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0))
   }
 
-  def forward(playerState: PlayerState, num: Int): (Int, Int) = {
+  def forward(playerState: PlayerState, num: Int): Position = {
     playerState.direction match {
-      case Direction.N => (playerState.x, playerState.y - num)
-      case Direction.W => (playerState.x - num, playerState.y)
-      case Direction.S => (playerState.x, playerState.y + num)
-      case Direction.E => (playerState.x + num, playerState.y)
+      case Direction.N => Position(playerState.x, playerState.y - num)
+      case Direction.W => Position(playerState.x - num, playerState.y)
+      case Direction.S => Position(playerState.x, playerState.y + num)
+      case Direction.E => Position(playerState.x + num, playerState.y)
     }
   }
 
-  def isPlayerInPosition(position: (Int, Int))(player: (Player.Service, PlayerState)): Boolean = {
-    player._2.x == position._1 && player._2.y == position._2
+  def isPlayerInPosition(position: Position)(player: (Player.Service, PlayerState)): Boolean = {
+    player._2.x == position.x && player._2.y == position.y
   }
 
   def movePlayerForward(arena: Map[Player.Service, PlayerState], player: Player.Service, playerState: PlayerState): Map[Player.Service, PlayerState] = {
@@ -260,13 +272,13 @@ object Arena {
 
     val isOtherPlayerInPosition = arena.exists(isPlayerInPosition(newTentativePosition))
 
-    val isOutOfBounds = newTentativePosition._1 < 0 || newTentativePosition._1 > dimensions._1 - 1 ||
-      newTentativePosition._2 < 0 || newTentativePosition._2 > dimensions._2 - 1
+    val isOutOfBounds = newTentativePosition.x < 0 || newTentativePosition.x > dimensions.width - 1 ||
+      newTentativePosition.y < 0 || newTentativePosition.y > dimensions.height - 1
 
     if (isOtherPlayerInPosition || isOutOfBounds)
       arena
     else
-      arena.updated(player, playerState.copy(x = newTentativePosition._1, y = newTentativePosition._2))
+      arena.updated(player, playerState.copy(x = newTentativePosition.x, y = newTentativePosition.y))
   }
 
   def playerThrow(arena: Map[Player.Service, PlayerState], player: Player.Service, playerState: PlayerState): Map[Player.Service, PlayerState] = {
@@ -316,13 +328,13 @@ object Arena {
   def updateArena(current: ArenaState)
                  (playerMove: (Map[Player.Service, PlayerState], Player) => Future[Option[(Move, FiniteDuration)]])
                  (implicit ec: ExecutionContext): Future[ArenaState] = {
-    val (arena, name, viewers, players, state) = current
+    //val (arena, name, emojiCode, viewers, players, state) = current
 
-    val stateWithGonePlayersRemoved = state.view.filterKeys(players.map(_.service).contains)
+    val stateWithGonePlayersRemoved = current.playerStates.view.filterKeys(current.players.map(_.service).contains)
 
-    val readyArena = players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
+    val readyArena = current.players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
       currentState.get(player.service).fold {
-        addPlayerToArena(currentState, players, player.service)
+        addPlayerToArena(currentState, current.players, player.service)
       } { playerState =>
         currentState.updated(player.service, playerState)
       }
@@ -338,7 +350,7 @@ object Arena {
     }
     // wtf
 
-    val playerMovesFutures = players.map { player =>
+    val playerMovesFutures = current.players.map { player =>
       playerMove(readyArena, player).map(player.service -> _)
     }
 
@@ -351,29 +363,31 @@ object Arena {
 
     val updatedArena = playerMovesFuture.map(performMoves(readyArena))
 
-    updatedArena.map((arena, name, viewers, players, _))
+    updatedArena.map(ArenaState(current.path, current.name, current.emojiCode, current.viewers, current.players, _))
   }
 
   def arenaStateToArenaUpdate(arenaState: ArenaState): ArenaUpdate = {
-    val playersStates = arenaState._4.flatMap { player =>
-      arenaState._5.get(player.service).map(player -> _)
+    val playersStates = arenaState.players.flatMap { player =>
+      arenaState.playerStates.get(player.service).map(player -> _)
     }.toMap
 
-    (arenaState._1, (arenaState._2, calcDimensions(arenaState._4.size), playersStates))
+    ArenaUpdate(arenaState.path, ArenaDimsAndPlayers(arenaState.name, arenaState.emojiCode, calcDimensions(arenaState.players.size), playersStates))
   }
 
   def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed))(implicit ec: ExecutionContext, wsClient: StandaloneWSClient): Future[Option[ArenaState]] = {
     val (viewersAndPlayers, _) = data
 
-    val arenaState = maybeArenaState.flatMap { case (_, _, _, currentPlayers, playersState) =>
-      if (currentPlayers == viewersAndPlayers._4)
-      // update the viewers
-      Some((viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, viewersAndPlayers._4, playersState))
-      else
-      // if the players changes, reinit the playersState
-      Option.empty
+    val arenaState = maybeArenaState.flatMap { arenaState =>
+      if (arenaState.players == viewersAndPlayers.players) {
+        // update the viewers
+        Some(ArenaState(viewersAndPlayers.path, viewersAndPlayers.name, viewersAndPlayers.emojiCode, viewersAndPlayers.viewers, viewersAndPlayers.players, arenaState.playerStates))
+      }
+      else {
+        // if the players changes, reinit the playersState
+        Option.empty
+      }
     } getOrElse {
-      (viewersAndPlayers._1, viewersAndPlayers._2, viewersAndPlayers._3, viewersAndPlayers._4, Map.empty[Player.Service, PlayerState])
+      ArenaState(viewersAndPlayers.path, viewersAndPlayers.name, viewersAndPlayers.emojiCode, viewersAndPlayers.viewers, viewersAndPlayers.players, Map.empty[Player.Service, PlayerState])
     }
 
     updateArena(arenaState)(playerMoveWs).map(Some(_))

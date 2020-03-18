@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cell.appendChild(img);
 
             if (player.wasHit) {
+              cell.style.cssText = "--emoji: url(https://noto-website-2.storage.googleapis.com/emoji/emoji_u"+data.emoji_code+".png);";
               cell.className = cell.className + " hit";
             }
 

@@ -33,8 +33,8 @@ object Events {
 
   case object PlayersRefresh
 
-  type ArenaDimsAndPlayers = (Arena.Name, (Int, Int), Map[Player, PlayerState])
-  type ArenaUpdate = (Arena.Path, ArenaDimsAndPlayers)
+  case class ArenaDimsAndPlayers(name: Arena.Name, emojiCode: Arena.EmojiCode, dims: Arena.Dimensions, playerStates: Map[Player, PlayerState])
+  case class ArenaUpdate(path: Arena.Path, arenaDimsAndPlayers: ArenaDimsAndPlayers)
 
   implicit val urlWrites = Writes[URL](url => JsString(url.toString))
 
@@ -48,19 +48,22 @@ object Events {
     (__ \ "score").write[Int]
   ) { playerPlayerState: (Player, PlayerState) =>
     val (player, playerState) = playerPlayerState
+
     (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score)
   }
 
   implicit val arenaDimsAndPlayersWrites = (
     (__ \ "name").write[String] ~
+    (__ \ "emoji_code").write[String] ~
     (__ \ "width").write[Int] ~
     (__ \ "height").write[Int] ~
     (__ \ "players").write[Map[String, (Player, PlayerState)]]
   ) { arenaDimsAndPlayersWrites: ArenaDimsAndPlayers =>
-    val playerPlayerStates = arenaDimsAndPlayersWrites._3.map { case (player, playerState) =>
+    val playerPlayerStates = arenaDimsAndPlayersWrites.playerStates.map { case (player, playerState) =>
       (player.service, (player, playerState))
     }
-    (arenaDimsAndPlayersWrites._1, arenaDimsAndPlayersWrites._2._1, arenaDimsAndPlayersWrites._2._2, playerPlayerStates)
+
+    (arenaDimsAndPlayersWrites.name, arenaDimsAndPlayersWrites.emojiCode, arenaDimsAndPlayersWrites.dims.width, arenaDimsAndPlayersWrites.dims.height, playerPlayerStates)
   }
 
 }
