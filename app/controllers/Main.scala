@@ -54,7 +54,7 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implici
   def updates(arena: Arena.Path, uuid: UUID) = Action {
     // todo: one global source and broadcast to all viewers
 
-    val viewerPingSource = Source.repeat(NotUsed).map[ProducerRecord[UUID, Arena.Path]] { _ =>
+    val viewerPingSource = Source.repeat {
       new ProducerRecord(Topics.viewerPing, uuid, arena)
     }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
 
