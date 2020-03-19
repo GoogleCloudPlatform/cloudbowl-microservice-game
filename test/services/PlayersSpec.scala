@@ -19,7 +19,7 @@ package services
 import akka.actor.ActorSystem
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import play.api.Configuration
-import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import play.api.libs.ws.ahc.{AhcWSClient, StandaloneAhcWSClient}
 import play.api.test.Helpers._
 
 import scala.util.Try
@@ -30,7 +30,7 @@ class PlayersSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
   lazy implicit val actorSystem = ActorSystem()
   lazy implicit val ec = actorSystem.dispatcher
 
-  lazy val wsClient = StandaloneAhcWSClient()
+  lazy val wsClient = AhcWSClient()
 
   // todo: this requires a spreadsheet with specific values
   "googlesheets" must {
@@ -50,7 +50,7 @@ class PlayersSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
   "github" must {
     "work" in {
-      val config = new GitHubPlayersConfig(Configuration(actorSystem.settings.config))
+      val config = new GitHub(Configuration(actorSystem.settings.config), wsClient)
       if (config.isConfigured) {
         val gitHubPlayers = new GitHubPlayers(config, wsClient)
         val arenaConfigAndPlayers = await(gitHubPlayers.fetch("test"))

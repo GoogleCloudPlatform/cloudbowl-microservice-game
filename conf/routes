@@ -4,6 +4,8 @@ GET         /updates/:arena                             controllers.Main.updates
 
 + nocsrf
 POST        /playersrefresh/:arena                      controllers.Main.playersRefresh(arena)
++ nocsrf
+POST        /playersrefresh                             controllers.Main.gitHubPlayersRefresh()
 
 GET         /assets/*file                               controllers.Assets.versioned(path="/public", file: Asset)
 ->          /webjars                                    webjars.Routes

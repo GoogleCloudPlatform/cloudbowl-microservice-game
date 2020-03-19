@@ -25,7 +25,7 @@ import models.Arena
 import models.Arena.{ArenaState, MaybeViewersAndMaybePlayers, ViewersAndPlayers}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import play.api.libs.ws.ahc.AhcWSClient
 import services.KafkaSerialization._
 import services.{Kafka, Topics}
 
@@ -37,7 +37,7 @@ object Battle extends App {
 
   implicit val ec = actorSystem.dispatcher
 
-  implicit val wsClient = StandaloneAhcWSClient()
+  implicit val wsClient = AhcWSClient()
 
   // no consumer group partitioning
   val groupId = UUID.randomUUID().toString

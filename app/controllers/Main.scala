@@ -20,29 +20,31 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import javax.inject.{Inject, Singleton}
 import models.Arena
 import models.Events._
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.mvc.InjectedController
 import services.KafkaSerialization._
-import services.{GoogleSheetPlayersConfig, Kafka, Topics}
+import services.{GitHub, GoogleSheetPlayersConfig, Kafka, Topics}
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
+class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub: GitHub)(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
   val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
   val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
 
   // wtf compiler
   if (false) {
-    (ec, actorSystem)
+    ec
   }
   // eowtf
 
@@ -71,6 +73,7 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implici
     Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
   }
 
+  // this endpoint expects the webhook call from google sheets
   def playersRefresh(arena: Arena.Path) = Action { request =>
     if (request.headers.get(AUTHORIZATION).contains(googleSheetPlayersConfig.maybePsk.get)) {
       val record = new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
@@ -79,6 +82,40 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig)(implici
     }
     else {
       Unauthorized
+    }
+  }
+
+  // this endpoint expects the webhook call from github
+  def gitHubPlayersRefresh() = Action.async(parse.json) { request =>
+    val maybeHubSignature = request.headers.get("X-Hub-Signature")
+
+    val authorized = maybeHubSignature.fold(true) { hubSignature =>
+      gitHub.maybePsk.fold(false) { psk =>
+        val signingKey = new SecretKeySpec(psk.getBytes(), "HmacSHA1")
+        val mac = Mac.getInstance("HmacSHA1")
+        mac.init(signingKey)
+        val signature = mac.doFinal(request.body.toString().getBytes)
+
+        "sha1=" + signature.map("%02x".format(_)).mkString == hubSignature
+      }
+    }
+
+    if (authorized) {
+      val arenas = (request.body \ "commits").as[Seq[JsObject]].foldLeft(Set.empty[String]) { case (arenasChanged, commit) =>
+        val filesChanged = (commit \ "added").as[Set[String]] ++ (commit \ "removed").as[Set[String]] ++ (commit \ "modified").as[Set[String]]
+        arenasChanged ++ filesChanged.map(_.stripSuffix(".json"))
+      }
+
+      val messages = arenas.map { arena =>
+        new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
+      }
+
+      Source(messages).to(playersRefreshSink).run()
+
+      Future.successful(Ok)
+    }
+    else {
+      Future.successful(Unauthorized)
     }
   }
 

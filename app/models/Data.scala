@@ -29,9 +29,9 @@ import org.apache.kafka.common.serialization.Deserializer
 import play.api.Configuration
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
-import play.api.libs.ws.ahc.StandaloneAhcWSResponse
-import play.api.libs.ws.{StandaloneWSClient, WSRequestExecutor, WSRequestFilter}
-import services.{DevPlayers, GitHubPlayers, GitHubPlayersConfig, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
+import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
+import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
+import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
@@ -64,7 +64,7 @@ object Arena {
   case class ViewersAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player])
   case class ArenaState(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player], playerStates: Map[Player.Service, PlayerState])
 
-  case class ResponseWithDuration(response: play.shaded.ahc.org.asynchttpclient.Response, duration: FiniteDuration) extends StandaloneAhcWSResponse(response)
+  case class ResponseWithDuration(response: StandaloneWSResponse, duration: FiniteDuration) extends StandaloneAhcWSResponse(response.underlying[play.shaded.ahc.org.asynchttpclient.Response])
 
   case class Position(x: Int, y: Int)
   case class Dimensions(width: Int, height: Int)
@@ -118,25 +118,25 @@ object Arena {
   }
 
   // todo: better
-  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient): Players = {
+  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Players = {
     val googleSheetPlayersConfig = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
-    val gitHubPlayersConfig = new GitHubPlayersConfig(Configuration(actorSystem.settings.config))
+    val gitHub = new GitHub(Configuration(actorSystem.settings.config), wsClient)
     if (googleSheetPlayersConfig.isConfigured)
       new GoogleSheetPlayers(googleSheetPlayersConfig, wsClient)
-    else if (gitHubPlayersConfig.isConfigured)
-      new GitHubPlayers(gitHubPlayersConfig, wsClient)
+    else if (gitHub.isConfigured)
+      new GitHubPlayers(gitHub, wsClient)
     else
       new DevPlayers
   }
 
 
-  def playersRefreshSource(groupId: String)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient, keyDeserializer: Deserializer[Path], valueDeserializer: Deserializer[Events.PlayersRefresh.type]): Source[ArenaConfigAndPlayers, _] = {
+  def playersRefreshSource(groupId: String)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, keyDeserializer: Deserializer[Path], valueDeserializer: Deserializer[Events.PlayersRefresh.type]): Source[ArenaConfigAndPlayers, _] = {
     Kafka.source[Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
       playerService.fetch(record.key())
     }
   }
 
-  def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: StandaloneWSClient): Future[Option[MaybeViewersAndMaybePlayers]] = {
+  def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Future[Option[MaybeViewersAndMaybePlayers]] = {
     viewersOrPlayers.fold({ pathedViewers =>
       // We have the viewers, if we don't have the players, fetch them
       arenaViewersAndPlayers.flatMap(_.maybeArenaConfigAndPlayers).map(Future.successful).getOrElse {
@@ -190,8 +190,8 @@ object Arena {
   //   }
   // }
   //
-  def playerMoveWs(arena: Map[Player.Service, PlayerState], player: Player)(implicit ec: ExecutionContext, wsClient: StandaloneWSClient): Future[Option[(Move, FiniteDuration)]] = {
-    implicit val playerStateWrites = PlayerState.jsonWrites
+  def playerMoveWs(arena: Map[Player.Service, PlayerState], player: Player)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[(Move, FiniteDuration)]] = {
+    implicit val playerStateWrites: Writes[PlayerState] = PlayerState.jsonWrites
 
     val dims = calcDimensions(arena.keys.size)
 
@@ -214,13 +214,13 @@ object Arena {
         requestExecutor(request).map { response =>
           val endTime = System.nanoTime()
           val duration = FiniteDuration(endTime - startTime, TimeUnit.NANOSECONDS)
-          ResponseWithDuration(response.underlying[play.shaded.ahc.org.asynchttpclient.Response], duration)
+          ResponseWithDuration(response, duration)
         }
       }
     }
 
     wsClient.url(player.service).withRequestFilter(timingRequestFilter).post(json).collect {
-      case response: ResponseWithDuration =>
+      case AhcWSResponse(response: ResponseWithDuration) =>
         response.status match {
           case Status.OK =>
             for {
@@ -231,7 +231,8 @@ object Arena {
             None
         }
     } recoverWith {
-      case _ => Future.successful(None)
+      case _ =>
+        Future.successful(None)
     }
   }
 
@@ -328,7 +329,6 @@ object Arena {
   def updateArena(current: ArenaState)
                  (playerMove: (Map[Player.Service, PlayerState], Player) => Future[Option[(Move, FiniteDuration)]])
                  (implicit ec: ExecutionContext): Future[ArenaState] = {
-    //val (arena, name, emojiCode, viewers, players, state) = current
 
     val stateWithGonePlayersRemoved = current.playerStates.view.filterKeys(current.players.map(_.service).contains)
 
@@ -374,7 +374,7 @@ object Arena {
     ArenaUpdate(arenaState.path, ArenaDimsAndPlayers(arenaState.name, arenaState.emojiCode, calcDimensions(arenaState.players.size), playersStates))
   }
 
-  def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed))(implicit ec: ExecutionContext, wsClient: StandaloneWSClient): Future[Option[ArenaState]] = {
+  def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed))(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
     val (viewersAndPlayers, _) = data
 
     val arenaState = maybeArenaState.flatMap { arenaState =>
