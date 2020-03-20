@@ -10,9 +10,9 @@ steps:
   args:
   - '-c'
   - |
-     sed -e 's/$PROJECT_ID/'"$PROJECT_ID"'/g' kubernetes.yaml.tpl | \
-     sed -e 's/$REPO_NAME/'"$REPO_NAME"'/g' | \
-     sed -e 's/$COMMIT_SHA/'"$COMMIT_SHA"'/g' > kubernetes.yaml
+     sed -e 's/\$PROJECT_ID/'"$PROJECT_ID"'/g' kubernetes.yaml.tpl | \
+     sed -e 's/\$REPO_NAME/'"$REPO_NAME"'/g' | \
+     sed -e 's/\$COMMIT_SHA/'"$COMMIT_SHA"'/g' > kubernetes.yaml
 
 - name: gcr.io/cloud-builders/kubectl
   args: ['apply', '-f', 'kubernetes.yaml']
