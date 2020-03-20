@@ -4,7 +4,6 @@ metadata:
   labels:
     app: cloudbowl-battle
   name: cloudbowl-battle
-  namespace: default
 spec:
   replicas: 1
   selector:
@@ -26,29 +25,39 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: KAFKA_BOOTSTRAP_SERVERS
-              name: cloudbowl-config-scgr
+              name: cloudbowl-battle-config
         - name: KAFKA_CLUSTER_API_KEY
           valueFrom:
             configMapKeyRef:
               key: KAFKA_CLUSTER_API_KEY
-              name: cloudbowl-config-scgr
+              name: cloudbowl-battle-config
         - name: KAFKA_CLUSTER_API_SECRET
           valueFrom:
             configMapKeyRef:
               key: KAFKA_CLUSTER_API_SECRET
-              name: cloudbowl-config-scgr
-        - name: APPLICATION_SECRET
+              name: cloudbowl-battle-config
+        - name: SHEET_CLIENT_EMAIL
           valueFrom:
             configMapKeyRef:
-              key: APPLICATION_SECRET
-              name: cloudbowl-config-scgr
-        - name: WEBJARS_USE_CDN
+              key: SHEET_CLIENT_EMAIL
+              name: cloudbowl-battle-config
+        - name: SHEET_ID
           valueFrom:
             configMapKeyRef:
-              key: WEBJARS_USE_CDN
-              name: cloudbowl-config-scgr
-        - name: SHEET_PSK
+              key: SHEET_ID
+              name: cloudbowl-battle-config
+        - name: SHEET_NAME
           valueFrom:
             configMapKeyRef:
-              key: SHEET_PSK
-              name: cloudbowl-config-scgr
+              key: SHEET_NAME
+              name: cloudbowl-battle-config
+        - name: SHEET_PRIVATE_KEY
+          valueFrom:
+            configMapKeyRef:
+              key: SHEET_PRIVATE_KEY
+              name: cloudbowl-battle-config
+        - name: SHEET_PRIVATE_KEY_ID
+          valueFrom:
+            configMapKeyRef:
+              key: SHEET_PRIVATE_KEY_ID
+              name: cloudbowl-battle-config
