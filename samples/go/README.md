@@ -1,4 +1,4 @@
-CloudBowl - Sample - Java Quarkus
+CloudBowl - Sample - Go
 ---------------------------------
 
 To make changes, edit the `play` method in [`main.go`](./main.go)
