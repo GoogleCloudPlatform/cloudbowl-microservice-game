@@ -2,23 +2,25 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: cloudbowl
-  name: cloudbowl
+    app: cloudbowl-battle
+  name: cloudbowl-battle
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: cloudbowl
+      app: cloudbowl-battle
   template:
     metadata:
       labels:
-        app: cloudbowl
+        app: cloudbowl-battle
     spec:
       containers:
       - name: $REPO_NAME
         image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
         imagePullPolicy: IfNotPresent
+        args:
+        - battle
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
           valueFrom:
