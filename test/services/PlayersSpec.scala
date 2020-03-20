@@ -19,7 +19,7 @@ package services
 import akka.actor.ActorSystem
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import play.api.Configuration
-import play.api.libs.ws.ahc.{AhcWSClient, StandaloneAhcWSClient}
+import play.api.libs.ws.ahc.AhcWSClient
 import play.api.test.Helpers._
 
 import scala.util.Try
