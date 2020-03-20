@@ -137,8 +137,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       stringSource.onerror = (event) => {
         console.error(event);
-        // try to reconnect
-        window.setTimeout(eventSource, 5000);
+
+        // the browser reconnects automatically in some cases, but if it doesn't, then we do it manually
+        if (event.target.readyState === EventSource.CLOSED) {
+          // try to reconnect
+          window.setTimeout(eventSource, 5000);
+        }
       };
     }
 
