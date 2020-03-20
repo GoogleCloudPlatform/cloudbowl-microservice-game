@@ -22,7 +22,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.inject.{Inject, Singleton}
+import javax.inject.Inject
 import models.Arena
 import models.Events._
 import org.apache.kafka.clients.producer.ProducerRecord
