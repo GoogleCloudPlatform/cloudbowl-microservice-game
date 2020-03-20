@@ -16,7 +16,10 @@ spec:
         app: cloudbowl
     spec:
       containers:
-      - env:
+      - name: $REPO_NAME
+        image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
+        imagePullPolicy: IfNotPresent
+        env:
         - name: KAFKA_BOOTSTRAP_SERVERS
           valueFrom:
             configMapKeyRef:
@@ -47,5 +50,3 @@ spec:
             configMapKeyRef:
               key: SHEET_PSK
               name: cloudbowl-config-scgr
-        image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
-        imagePullPolicy: IfNotPresent
