@@ -36,11 +36,7 @@ import services.{GitHub, GoogleSheetPlayersConfig, Kafka, Topics}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-@Singleton
 class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub: GitHub)(implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
-
-  val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
-  val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
 
   // wtf compiler
   if (false) {
@@ -53,6 +49,8 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   }
 
   def updates(arena: Arena.Path, uuid: UUID) = Action {
+    val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
+
     // todo: one global source and broadcast to all viewers
 
     val viewerPingSource = Source.repeat {
@@ -75,6 +73,8 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
 
   // this endpoint expects the webhook call from google sheets
   def playersRefresh(arena: Arena.Path) = Action { request =>
+    val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
+
     if (request.headers.get(AUTHORIZATION).contains(googleSheetPlayersConfig.maybePsk.get)) {
       val record = new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
       Source.single(record).to(playersRefreshSink).run()
@@ -87,6 +87,8 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
 
   // this endpoint expects the webhook call from github
   def gitHubPlayersRefresh() = Action.async(parse.json) { request =>
+    val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
+
     val maybeHubSignature = request.headers.get("X-Hub-Signature")
 
     val authorized = maybeHubSignature.fold(true) { hubSignature =>
