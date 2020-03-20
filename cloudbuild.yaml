@@ -1,3 +1,21 @@
 steps:
 - name: 'gcr.io/cloudrun/pack'
   args: ['build', '--builder=heroku/buildpacks:18', '--publish', 'gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['run', 'deploy', '--image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA', '--platform=managed', '--project=$PROJECT_ID', '--region=us-central1', '--allow-unauthenticated', '--memory=512Mi', 'cloudbowl']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: /bin/sh
+  args:
+  - '-c'
+  - |
+     sed -e 's/$PROJECT_ID/'"$PROJECT_ID"'/g' kubernetes.yaml.tpl | \
+     sed -e 's/$REPO_NAME/'"$REPO_NAME"'/g' | \
+     sed -e 's/$COMMIT_SHA/'"$COMMIT_SHA"'/g' > kubernetes.yaml
+
+- name: gcr.io/cloud-builders/kubectl
+  args: ['apply', '-f', 'kubernetes.yaml']
+  env:
+  - 'CLOUDSDK_COMPUTE_ZONE=us-central1-a'
+  - 'CLOUDSDK_CONTAINER_CLUSTER=demo-cluster'
