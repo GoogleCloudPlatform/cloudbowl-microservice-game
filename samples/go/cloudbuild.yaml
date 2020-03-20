@@ -1,3 +1,6 @@
 steps:
 - name: 'gcr.io/cloudrun/pack'
-  args: ['build', '--builder=heroku/buildpacks:18', '--path', 'samples/go', '--publish', 'gcr.io/$PROJECT_ID/$REPO_NAME-samples-go:$COMMIT_SHA']
+  args: ['build', '--builder=heroku/buildpacks:18', '--path', 'samples/go', '--publish', 'gcr.io/$PROJECT_ID/cloudbowl-samples-go:$COMMIT_SHA']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['run', 'deploy', '--image=gcr.io/$PROJECT_ID/cloudbowl-samples-go:$COMMIT_SHA', '--platform=managed', '--project=$PROJECT_ID', '--region=us-central1', '--allow-unauthenticated', '--memory=256Mi', 'cloudbowl-samples-go']
