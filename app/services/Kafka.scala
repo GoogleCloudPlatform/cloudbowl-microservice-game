@@ -84,9 +84,9 @@ object Kafka {
 
 object Topics {
 
-  val playersRefresh = "playersRefresh"
-  val viewerPing = "viewerPing"
-  val arenaUpdate = "arenaUpdate"
+  val playersRefresh = "players-refresh"
+  val viewerPing = "viewer-ping"
+  val arenaUpdate = "arena-update"
 
 }
 
