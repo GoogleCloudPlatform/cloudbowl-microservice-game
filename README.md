@@ -105,6 +105,10 @@ Prod:
    
     echo "$IP_ADDRESS.nip.io"
     ```
+1. Turn on TLS support:
+    ```
+    kubectl patch cm config-domainmapping -n knative-serving -p '{"data":{"autoTLS":"Enabled"}}'
+    ```
 1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://cloudbowl-web.default.35.184.62.161.nip.io/playersrefresh) and with a preshared key you have made up.  For premissions, select Contents *Read-only* and for Events select *Push*.
 1. Generate a Private Key for the GitHub App
 1. Install the GitHub App on the repo that will hold the players
