@@ -1,4 +1,8 @@
 steps:
+- name: 'adoptopenjdk/openjdk8'
+  entrypoint: './sbt'
+  args: ['test']
+
 - name: 'gcr.io/cloudrun/pack'
   args: ['build', '--builder=heroku/buildpacks:18', '--publish', 'gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 
@@ -6,7 +10,7 @@ steps:
   args: ['run', 'deploy', '--image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA', '--platform=managed', '--project=$PROJECT_ID', '--region=us-central1', '--allow-unauthenticated', '--memory=512Mi', 'cloudbowl']
 
 - name: 'gcr.io/cloud-builders/gcloud'
-  entrypoint: /bin/sh
+  entrypoint: '/bin/sh'
   args:
   - '-c'
   - |
