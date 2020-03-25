@@ -22,8 +22,8 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import models.Arena
-import models.Arena.{ArenaState, MaybeViewersAndMaybePlayers, ViewersAndPlayers}
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
+import models.Arena.{ArenaConfigAndPlayers, ArenaState, MaybeViewersAndMaybePlayers, ViewersAndPlayers}
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.libs.ws.ahc.AhcWSClient
 import services.KafkaSerialization._
@@ -45,6 +45,12 @@ object Battle extends App {
 
   val viewerEventsSource = Kafka.source[UUID, Arena.Path](UUID.randomUUID().toString, Topics.viewerPing)
 
+  def playersRefreshSource(groupId: String): Source[ArenaConfigAndPlayers, _] = {
+    Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
+      Arena.playerService.fetch(record.key())
+    }
+  }
+
   val tick = Source.repeat(NotUsed).throttle(1, 15.seconds).map(Right(_))
 
   // todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
@@ -54,6 +60,15 @@ object Battle extends App {
     .merge(tick)
     .statefulMapConcat(Arena.viewersUpdate)
     .mergeSubstreams
+
+  // Emits with the initial state of viewers & players, and then emits whenever the viewers or players change
+  val viewersAndPlayersSource = viewersSource
+    .map(Left(_))
+    .merge(playersRefreshSource(groupId).map(Right(_)))
+    .groupBy(Int.MaxValue, Arena.arenaPathFromViewerOrPlayers)
+    .scanAsync(Option.empty[MaybeViewersAndMaybePlayers])(Arena.updatePlayers)
+    .mapConcat(Arena.onlyArenasWithViewersAndPlayers)
+  //.mergeSubstreams
 
   // todo: currently no persistence of ArenaState so it is lost on restart
   val arenaUpdateFlow = Flow[ViewersAndPlayers]
@@ -70,15 +85,6 @@ object Battle extends App {
   }
 
   val arenaUpdateSink = Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
-
-  // Emits with the initial state of viewers & players, and then emits whenever the viewers or players change
-  val viewersAndPlayersSource = viewersSource
-    .map(Left(_))
-    .merge(Arena.playersRefreshSource(groupId).map(Right(_)))
-    .groupBy(Int.MaxValue, Arena.arenaPathFromViewerOrPlayers)
-    .scanAsync(Option.empty[MaybeViewersAndMaybePlayers])(Arena.updatePlayers)
-    .mapConcat(Arena.onlyArenasWithViewersAndPlayers)
-  //.mergeSubstreams
 
   viewersAndPlayersSource
     .log("viewersAndPlayers")

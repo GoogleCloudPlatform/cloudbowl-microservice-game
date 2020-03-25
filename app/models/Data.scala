@@ -22,18 +22,16 @@ import java.util.concurrent.TimeUnit
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.serialization.Deserializer
 import play.api.Configuration
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
 import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
-import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
+import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Players}
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Random
 
@@ -129,13 +127,6 @@ object Arena {
       new DevPlayers
   }
 
-
-  def playersRefreshSource(groupId: String)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, keyDeserializer: Deserializer[Path], valueDeserializer: Deserializer[Events.PlayersRefresh.type]): Source[ArenaConfigAndPlayers, _] = {
-    Kafka.source[Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
-      playerService.fetch(record.key())
-    }
-  }
-
   def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Future[Option[MaybeViewersAndMaybePlayers]] = {
     viewersOrPlayers.fold({ pathedViewers =>
       // We have the viewers, if we don't have the players, fetch them
@@ -219,7 +210,7 @@ object Arena {
       }
     }
 
-    wsClient.url(player.service).withRequestFilter(timingRequestFilter).post(json).collect {
+    wsClient.url(player.service).withRequestFilter(timingRequestFilter).withRequestTimeout(1.second).post(json).collect {
       case AhcWSResponse(response: ResponseWithDuration) =>
         response.status match {
           case Status.OK =>
