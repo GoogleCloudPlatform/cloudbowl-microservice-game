@@ -133,10 +133,10 @@ spec:
                 configMapKeyRef:
                   key: APPLICATION_SECRET
                   name: cloudbowl-battle-config
-    metadata:
-      annotations:
-        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
-        autoscaling.knative.dev/metric: cpu
-        autoscaling.knative.dev/target: "75"
-        autoscaling.knative.dev/minScale: "2"
-        autoscaling.knative.dev/maxScale: "10"
+#    metadata:
+#      annotations:
+#        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
+#        autoscaling.knative.dev/metric: cpu
+#        autoscaling.knative.dev/target: "75"
+#        autoscaling.knative.dev/minScale: "2"
+#        autoscaling.knative.dev/maxScale: "10"
