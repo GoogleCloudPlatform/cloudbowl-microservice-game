@@ -2,6 +2,7 @@ apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
 metadata:
   name: players-refresh
+  namespace: kafka
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
@@ -12,6 +13,7 @@ apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
 metadata:
   name: viewer-ping
+  namespace: kafka
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
@@ -22,6 +24,7 @@ apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
 metadata:
   name: arena-update
+  namespace: kafka
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
@@ -57,52 +60,52 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: GITHUB_ORGREPO
-              name: cloudbowl-battle-config
+              name: cloudbowl-config
         - name: GITHUB_APP_ID
           valueFrom:
             configMapKeyRef:
               key: GITHUB_APP_ID
-              name: cloudbowl-battle-config
+              name: cloudbowl-config
         - name: GITHUB_APP_PRIVATE_KEY
           valueFrom:
             configMapKeyRef:
               key: GITHUB_APP_PRIVATE_KEY
-              name: cloudbowl-battle-config
+              name: cloudbowl-config-github-app
 #        - name: KAFKA_CLUSTER_API_KEY
 #          valueFrom:
 #            configMapKeyRef:
 #              key: KAFKA_CLUSTER_API_KEY
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: KAFKA_CLUSTER_API_SECRET
 #          valueFrom:
 #            configMapKeyRef:
 #              key: KAFKA_CLUSTER_API_SECRET
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: SHEET_CLIENT_EMAIL
 #          valueFrom:
 #            configMapKeyRef:
 #              key: SHEET_CLIENT_EMAIL
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: SHEET_ID
 #          valueFrom:
 #            configMapKeyRef:
 #              key: SHEET_ID
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: SHEET_NAME
 #          valueFrom:
 #            configMapKeyRef:
 #              key: SHEET_NAME
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: SHEET_PRIVATE_KEY
 #          valueFrom:
 #            configMapKeyRef:
 #              key: SHEET_PRIVATE_KEY
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 #        - name: SHEET_PRIVATE_KEY_ID
 #          valueFrom:
 #            configMapKeyRef:
 #              key: SHEET_PRIVATE_KEY_ID
-#              name: cloudbowl-battle-config
+#              name: cloudbowl-config
 ---
 apiVersion: serving.knative.dev/v1alpha1
 kind: Service
@@ -122,21 +125,21 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   key: GITHUB_PSK
-                  name: cloudbowl-battle-config
+                  name: cloudbowl-config
             - name: WEBJARS_USE_CDN
               valueFrom:
                 configMapKeyRef:
                   key: WEBJARS_USE_CDN
-                  name: cloudbowl-battle-config
+                  name: cloudbowl-config
             - name: APPLICATION_SECRET
               valueFrom:
                 configMapKeyRef:
                   key: APPLICATION_SECRET
-                  name: cloudbowl-battle-config
-#    metadata:
-#      annotations:
-#        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
-#        autoscaling.knative.dev/metric: cpu
-#        autoscaling.knative.dev/target: "75"
-#        autoscaling.knative.dev/minScale: "2"
-#        autoscaling.knative.dev/maxScale: "10"
+                  name: cloudbowl-config
+    metadata:
+      annotations:
+        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
+        autoscaling.knative.dev/metric: cpu
+        autoscaling.knative.dev/target: "75"
+        autoscaling.knative.dev/minScale: "2"
+        autoscaling.knative.dev/maxScale: "10"

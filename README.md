@@ -63,6 +63,7 @@ For Google Sheets Player backend:
 Prod:
 1. Create GKE Cluster with Cloud Run
     ```
+    gcloud config set core/project YOUR_PROJECT
     gcloud config set compute/region us-central1
     gcloud config set container/cluster cloudbowl
     gcloud container clusters create \
@@ -73,6 +74,7 @@ Prod:
       --enable-ip-alias \
       --enable-autoscaling --num-nodes=3 --min-nodes=0 --max-nodes=10 \
       --enable-autorepair \
+      --cluster-version=1.15 \
       --scopes cloud-platform \
       $(gcloud config get-value container/cluster)
     ```
@@ -88,28 +90,12 @@ Prod:
     kubectl apply -n kafka -f .infra/kafka.yaml
     kubectl wait -n kafka kafka/cloudbowl --for=condition=Ready --timeout=300s
     ```
-1. Setup the domain name (for example with nip.io)
+1. Get your IP Address:
     ```
-    export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system \
-      -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
-    
-    cat <<EOF | kubectl apply -f -
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: config-domain
-      namespace: knative-serving
-    data:
-      $IP_ADDRESS.nip.io: ""
-    EOF
-   
-    echo "$IP_ADDRESS.nip.io"
+    export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
+    echo $IP_ADDRESS
     ```
-1. Turn on TLS support:
-    ```
-    kubectl patch cm config-domainmapping -n knative-serving -p '{"data":{"autoTLS":"Enabled"}}'
-    ```
-1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://cloudbowl-web.default.35.184.62.161.nip.io/playersrefresh) and with a preshared key you have made up.  For premissions, select Contents *Read-only* and for Events select *Push*.
+1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://IP_ADDRESS.nip.io/playersrefresh) and with a preshared key you have made up.  For permissions, select Contents *Read-only* and for Events select *Push*.
 1. Generate a Private Key for the GitHub App
 1. Install the GitHub App on the repo that will hold the players
 1. Create a ConfigMap named `cloudbowl-battle-config`:
@@ -118,16 +104,34 @@ Prod:
     apiVersion: v1
     kind: ConfigMap
     metadata:
-      name: cloudbowl-battle-config
+      name: cloudbowl-config
     data:
       GITHUB_ORGREPO: # Your GitHub Org/Repo
       GITHUB_APP_ID: # Your GitHub App ID
-      GITHUB_APP_PRIVATE_KEY: # Your GitHub App Private Key (cat YOUR.private-key.pem | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g')
       GITHUB_PSK: # Your GitHub WebHook's preshared key
       WEBJARS_USE_CDN: 'true'
       APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
     EOF
-1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_ZONE` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
+
+    kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem)
+    ```
+1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
+1. Once the service is deployed, setup the domain name
+    ```
+    export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
+    export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
+   
+    echo "IP_ADDRESS=$IP_ADDRESS"
+    echo "PROJECT_ID=$PROJECT_ID"
+   
+    gcloud beta run domain-mappings create --service cloudbowl-web --domain $IP_ADDRESS.nip.io --platform=gke --project=$PROJECT_ID --cluster=cloudbowl --cluster-location=us-central1
+    gcloud compute addresses create cloudbowl-ip --addresses=$IP_ADDRESS --region=us-central1
+    ```
+1. Turn on TLS support:
+    ```
+    kubectl patch cm config-domainmapping -n knative-serving -p '{"data":{"autoTLS":"Enabled"}}'
+    kubectl get kcert
+    ```
 
 # TODO
 
