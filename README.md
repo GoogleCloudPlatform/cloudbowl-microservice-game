@@ -98,7 +98,7 @@ Prod:
 1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://IP_ADDRESS.nip.io/playersrefresh) and with a preshared key you have made up.  For permissions, select Contents *Read-only* and for Events select *Push*.
 1. Generate a Private Key for the GitHub App
 1. Install the GitHub App on the repo that will hold the players
-1. Create a ConfigMap named `cloudbowl-battle-config`:
+1. Create a ConfigMap named `cloudbowl-config`:
     ```
     cat <<EOF | kubectl apply -f -
     apiVersion: v1
@@ -116,16 +116,14 @@ Prod:
     kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem)
     ```
 1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
-1. Once the service is deployed, setup the domain name
+1. Once the service is deployed, setup the domain name:
     ```
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
-    export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
-   
     echo "IP_ADDRESS=$IP_ADDRESS"
-    echo "PROJECT_ID=$PROJECT_ID"
    
-    gcloud beta run domain-mappings create --service cloudbowl-web --domain $IP_ADDRESS.nip.io --platform=gke --project=$PROJECT_ID --cluster=cloudbowl --cluster-location=us-central1
-    gcloud compute addresses create cloudbowl-ip --addresses=$IP_ADDRESS --region=us-central1
+    gcloud beta run domain-mappings create --service cloudbowl-web --domain $IP_ADDRESS.nip.io --platform=gke --project=$(gcloud config get-value core/project) \
+      --cluster=$(gcloud config get-value container/cluster) --cluster-location=$(gcloud config get-value compute/region)
+    gcloud compute addresses create cloudbowl-ip --addresses=$IP_ADDRESS --region=$(gcloud config get-value compute/region)
     ```
 1. Turn on TLS support:
     ```
