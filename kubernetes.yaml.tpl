@@ -125,7 +125,7 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: GITHUB_PSK
-               name: cloudbowl-config
+              name: cloudbowl-config
         - name: WEBJARS_USE_CDN
           valueFrom:
             configMapKeyRef:
