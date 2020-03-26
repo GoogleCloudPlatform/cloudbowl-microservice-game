@@ -72,7 +72,7 @@ Prod:
       --machine-type=n1-standard-4 \
       --enable-stackdriver-kubernetes \
       --enable-ip-alias \
-      --enable-autoscaling --num-nodes=3 --min-nodes=0 --max-nodes=10 \
+      --enable-autoscaling --num-nodes=3 --min-nodes=0 --max-nodes=20 \
       --enable-autorepair \
       --cluster-version=1.15 \
       --scopes cloud-platform \
