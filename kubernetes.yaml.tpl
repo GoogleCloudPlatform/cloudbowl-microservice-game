@@ -115,31 +115,35 @@ spec:
   template:
     spec:
       containers:
-        - image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
-          args:
-            - web
-          env:
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: cloudbowl-kafka-bootstrap.kafka:9092
-            - name: GITHUB_PSK
-              valueFrom:
-                configMapKeyRef:
-                  key: GITHUB_PSK
-                  name: cloudbowl-config
-            - name: WEBJARS_USE_CDN
-              valueFrom:
-                configMapKeyRef:
-                  key: WEBJARS_USE_CDN
-                  name: cloudbowl-config
-            - name: APPLICATION_SECRET
-              valueFrom:
-                configMapKeyRef:
-                  key: APPLICATION_SECRET
-                  name: cloudbowl-config
+      - image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
+        args:
+        - web
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: cloudbowl-kafka-bootstrap.kafka:9092
+        - name: GITHUB_PSK
+          valueFrom:
+            configMapKeyRef:
+              key: GITHUB_PSK
+               name: cloudbowl-config
+        - name: WEBJARS_USE_CDN
+          valueFrom:
+            configMapKeyRef:
+              key: WEBJARS_USE_CDN
+              name: cloudbowl-config
+        - name: APPLICATION_SECRET
+          valueFrom:
+            configMapKeyRef:
+              key: APPLICATION_SECRET
+              name: cloudbowl-config
+        resources:
+          limits:
+            cpu: "2"
+            memory: 1Gi
     metadata:
       annotations:
         autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
         autoscaling.knative.dev/metric: cpu
         autoscaling.knative.dev/target: "75"
-        autoscaling.knative.dev/minScale: "2"
+        autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "10"
