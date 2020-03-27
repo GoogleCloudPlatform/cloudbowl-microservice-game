@@ -60,7 +60,8 @@ For Google Sheets Player backend:
 1. TODO
 
 
-Prod:
+## Run on Google Cloud
+
 1. Create GKE Cluster with Cloud Run
     ```
     gcloud config set core/project YOUR_PROJECT
@@ -131,7 +132,7 @@ Prod:
     kubectl get kcert
     ```
 
-# TODO
+## TODO
 
 - Battle hot looping
 - Persist arenas
