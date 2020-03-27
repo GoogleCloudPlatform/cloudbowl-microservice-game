@@ -113,7 +113,7 @@ Prod:
       APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
     EOF
 
-    kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem)
+    kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem
     ```
 1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
 1. Once the service is deployed, setup the domain name:
