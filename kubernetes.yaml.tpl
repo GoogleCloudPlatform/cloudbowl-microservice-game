@@ -142,8 +142,8 @@ spec:
             memory: 1Gi
     metadata:
       annotations:
-        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
-        autoscaling.knative.dev/metric: cpu
-        autoscaling.knative.dev/target: "75"
+#        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
+#        autoscaling.knative.dev/metric: cpu
+#        autoscaling.knative.dev/target: "75"
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "10"
