@@ -72,12 +72,11 @@ object Battle extends App {
 
   // todo: currently no persistence of ArenaState so it is lost on restart
   val arenaUpdateFlow = Flow[ViewersAndPlayers]
-    .zipLatest(Source.repeat(NotUsed))
+    .zipLatest(Source.repeat(NotUsed).throttle(1, 1.second))
     .filter(_._1.viewers.nonEmpty) // only arenas with viewers
     .filter(_._1.players.nonEmpty) // only arenas with players
     .scanAsync(Option.empty[ArenaState])(Arena.performArenaUpdate)
     .mapConcat(_.toList)
-    .throttle(1, 1.second)
     .map(Arena.arenaStateToArenaUpdate)
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {

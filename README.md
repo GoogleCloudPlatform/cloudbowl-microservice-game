@@ -134,8 +134,6 @@ For Google Sheets Player backend:
 
 ## TODO
 
-- Battle hot looping
 - Persist arenas
 - Fan-out battle
 - Response times in player list
-- Local dev instructions
