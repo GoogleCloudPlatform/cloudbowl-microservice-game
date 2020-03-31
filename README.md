@@ -132,8 +132,23 @@ For Google Sheets Player backend:
     kubectl get kcert
     ```
 
+### Troubleshooting
+
+
+```
+# Pick a topic:
+export TOPIC=viewer-ping
+export TOPIC=players-refresh
+export TOPIC=arena-update
+
+# Describe a topic:
+kubectl -n kafka run kafka-consumer -ti --image=strimzi/kafka:0.17.0-kafka-2.4.0 --rm=true --restart=Never -- bin/kafka-topics.sh --describe --bootstrap-server cloudbowl-kafka-bootstrap.kafka:9092 --topic $TOPIC
+
+# Consume messages on a topic:
+kubectl -n kafka run kafka-consumer -ti --image=strimzi/kafka:0.17.0-kafka-2.4.0 --rm=true --restart=Never -- bin/kafka-console-consumer.sh --bootstrap-server cloudbowl-kafka-bootstrap.kafka:9092 --topic $TOPIC --from-beginning --property print.key=true --property key.separator=":"
+```
+
 ## TODO
 
 - Persist arenas
-- Fan-out battle
 - Response times in player list

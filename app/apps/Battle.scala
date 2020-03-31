@@ -38,9 +38,9 @@ object Battle extends App {
 
   val groupId = "battle"
 
-  val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
+  lazy val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
 
-  val arenaUpdateSink = Arena.KafkaSinksAndSources.arenaUpdateSink
+  lazy val arenaUpdateSink = Arena.KafkaSinksAndSources.arenaUpdateSink
 
   def playersRefreshSource(groupId: String): Source[ArenaConfigAndPlayers, _] = {
     Arena.KafkaSinksAndSources.playersRefreshSource(groupId).mapAsync(Int.MaxValue) { record =>
@@ -79,8 +79,6 @@ object Battle extends App {
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
     new ProducerRecord(Topics.arenaUpdate, arenaUpdate.path, arenaUpdate.arenaDimsAndPlayers)
   }
-
-
 
   viewersAndPlayersSource
     .log("viewersAndPlayers")
