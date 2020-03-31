@@ -42,7 +42,7 @@ object Battle extends App {
 
   lazy val arenaUpdateSink = Arena.KafkaSinksAndSources.arenaUpdateSink
 
-  def playersRefreshSource(groupId: String): Source[ArenaConfigAndPlayers, _] = {
+  lazy val playersRefreshSource: Source[ArenaConfigAndPlayers, _] = {
     Arena.KafkaSinksAndSources.playersRefreshSource(groupId).mapAsync(Int.MaxValue) { record =>
       Arena.playerService.fetch(record.key())
     }
@@ -61,7 +61,7 @@ object Battle extends App {
   // Emits with the initial state of viewers & players, and then emits whenever the viewers or players change
   val viewersAndPlayersSource = viewersSource
     .map(Left(_))
-    .merge(playersRefreshSource(groupId).map(Right(_)))
+    .merge(playersRefreshSource.map(Right(_)))
     .groupBy(Int.MaxValue, Arena.arenaPathFromViewerOrPlayers)
     .scanAsync(Option.empty[MaybeViewersAndMaybePlayers])(Arena.updatePlayers)
     .mapConcat(Arena.onlyArenasWithViewersAndPlayers)
