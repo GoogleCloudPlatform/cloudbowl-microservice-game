@@ -52,7 +52,7 @@ object Battle extends App {
 
   // todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
   val viewersSource = viewerEventsSource
-    .groupBy(Int.MaxValue, _.value())
+    .groupBy(Int.MaxValue, _.key())
     .map(Left(_))
     .merge(tick)
     .statefulMapConcat(Arena.viewersUpdate)
