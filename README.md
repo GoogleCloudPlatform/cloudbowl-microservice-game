@@ -41,6 +41,14 @@ Run Locally:
     Check out the *foo* arena: [http://localhost:9000/foo](http://localhost:9000/foo)
 
 
+Web UI Notes:
+
+Pause the Arena refresh:
+```
+document.body.dataset.paused = true;
+```
+
+
 Testing:
 
 For GitHub Player backend:
