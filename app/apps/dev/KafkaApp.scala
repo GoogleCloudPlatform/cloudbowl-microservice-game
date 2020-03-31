@@ -24,7 +24,8 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import com.dimafeng.testcontainers.KafkaContainer
 import models.Arena
-import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
+import models.Events.PlayersRefresh
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
 import services.KafkaSerialization._
@@ -32,11 +33,20 @@ import services.{Kafka, Topics}
 
 import scala.concurrent.duration._
 import scala.io.StdIn
+import scala.jdk.CollectionConverters._
 
 object KafkaApp extends App {
 
   val container = KafkaContainer()
   container.start()
+
+  val adminClientProps = new Properties()
+  adminClientProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, container.bootstrapServers)
+  val adminClient = AdminClient.create(adminClientProps)
+  val viewerPingTopic = new NewTopic(Topics.viewerPing, 5, 1.toShort)
+  val playersRefreshTopic = new NewTopic(Topics.playersRefresh, 5, 1.toShort)
+  val arenaUpdateTopic = new NewTopic(Topics.arenaUpdate, 5, 1.toShort)
+  adminClient.createTopics(List(viewerPingTopic, playersRefreshTopic, arenaUpdateTopic).asJavaCollection)
 
   sys.addShutdownHook {
     container.stop()
@@ -62,11 +72,13 @@ object KafkaApp extends App {
 object KafkaConsumerApp extends App {
   private implicit val actorSystem = ActorSystem()
 
-  val viewerEventsSource = Kafka.source[UUID, Arena.Path](UUID.randomUUID().toString, Topics.viewerPing)
+  val groupId = UUID.randomUUID().toString
 
-  val playersRefreshSource = Kafka.source[Arena.Path, PlayersRefresh.type](UUID.randomUUID().toString, Topics.playersRefresh)
+  val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
 
-  val arenaUpdateSource = Kafka.source[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+  val playersRefreshSource = Arena.KafkaSinksAndSources.playersRefreshSource(groupId)
+
+  val arenaUpdateSource = Arena.KafkaSinksAndSources.arenaUpdateSource(groupId)
 
   viewerEventsSource.merge(playersRefreshSource).merge(arenaUpdateSource).runForeach(println)
 }
@@ -96,7 +108,7 @@ object KafkaProducerApp extends App {
           val uuid = UUID.randomUUID()
           println(s"viewer $uuid joining for 1 minute")
           val cancelable = actorSystem.scheduler.scheduleAtFixedRate(Duration.Zero, 15.seconds) { () =>
-            send(Topics.viewerPing, uuid, arena)
+            send(Topics.viewerPing, arena, uuid)
           }
           actorSystem.scheduler.scheduleOnce(1.minute)(cancelable.cancel())
 

@@ -10,6 +10,9 @@
     </appender>
 
     <appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
         <appender-ref ref="STDOUT" />
     </appender>
 

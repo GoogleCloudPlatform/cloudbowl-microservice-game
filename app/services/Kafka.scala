@@ -19,11 +19,13 @@ package services
 import java.net.URL
 import java.util.UUID
 
+import akka.Done
 import akka.actor.ActorSystem
+import akka.kafka.scaladsl.Consumer.Control
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import com.typesafe.config.{Config, ConfigValueFactory}
 import models.Arena.Dimensions
 import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
 import models.{Arena, Direction, Player, PlayerState}
@@ -31,12 +33,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
 
+import scala.concurrent.Future
 import scala.util.Try
 
 object Kafka {
 
-  def config: Config = {
-    val baseConfig = ConfigFactory.load()
+  def authConfig(implicit actorSystem: ActorSystem): Config = {
+    val baseConfig = actorSystem.settings.config
 
     val maybeApiKey = Try(baseConfig.getString("kafka.cluster.api.key")).toOption
     val maybeApiSecret = Try(baseConfig.getString("kafka.cluster.api.secret")).toOption
@@ -53,31 +56,30 @@ object Kafka {
     }
   }
 
-  def consumerConfig(implicit actorSystem: ActorSystem): Config = {
-    config.withFallback(actorSystem.settings.config.getConfig(ConsumerSettings.configPath))
+  private def consumerConfig(implicit actorSystem: ActorSystem): Config = {
+    authConfig.withFallback(actorSystem.settings.config.getConfig(ConsumerSettings.configPath))
   }
 
-  def producerConfig(implicit actorSystem: ActorSystem): Config = {
-    config.withFallback(actorSystem.settings.config.getConfig(ProducerSettings.configPath))
+  private def producerConfig(implicit actorSystem: ActorSystem): Config = {
+    authConfig.withFallback(actorSystem.settings.config.getConfig(ProducerSettings.configPath))
   }
 
-  def producerSettings[K, V](keySerializer: Serializer[K], valueSerializer: Serializer[V])(implicit actorSystem: ActorSystem): ProducerSettings[K, V] = {
+  private def producerSettings[K, V](keySerializer: Serializer[K], valueSerializer: Serializer[V])(implicit actorSystem: ActorSystem): ProducerSettings[K, V] = {
     ProducerSettings(producerConfig, keySerializer, valueSerializer)
   }
 
-  def consumerSettings[K, V](keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V])(implicit actorSystem: ActorSystem): ConsumerSettings[K, V] = {
+  private def consumerSettings[K, V](keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V])(implicit actorSystem: ActorSystem): ConsumerSettings[K, V] = {
     ConsumerSettings(consumerConfig, keyDeserializer, valueDeserializer)
   }
 
-  def sink[K, V](implicit actorSystem: ActorSystem, keySerializer: Serializer[K], valueSerializer: Serializer[V]): Sink[ProducerRecord[K, V], _] = {
+  def sink[K, V](implicit actorSystem: ActorSystem, keySerializer: Serializer[K], valueSerializer: Serializer[V]): Sink[ProducerRecord[K, V], Future[Done]] = {
     Producer.plainSink(producerSettings(keySerializer, valueSerializer))
   }
 
-  // todo: partitions
-  def source[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], _] = {
+  def source[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], Control] = {
     val subscription = Subscriptions.topics(topic)
     val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
-    Consumer.plainSource(settings, subscription)
+    Consumer.plainPartitionedSource(settings, subscription).flatMapMerge(Int.MaxValue, _._2)
   }
 
 }

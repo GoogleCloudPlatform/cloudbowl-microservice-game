@@ -19,7 +19,7 @@ package controllers
 import java.util.UUID
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Source
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
@@ -30,8 +30,7 @@ import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.mvc.InjectedController
-import services.KafkaSerialization._
-import services.{GitHub, GoogleSheetPlayersConfig, Kafka, Topics}
+import services.{GitHub, GoogleSheetPlayersConfig, Topics}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -44,21 +43,22 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   }
   // eowtf
 
+  val viewerEventSink = Arena.KafkaSinksAndSources.viewerEventSink
+  val playersRefreshSink = Arena.KafkaSinksAndSources.playersRefreshSink
+
   def index(arena: Arena.Path) = Action {
     Ok(views.html.index(arena))
   }
 
   def updates(arena: Arena.Path, uuid: UUID) = Action {
-    val viewerEventSink: Sink[ProducerRecord[UUID, Arena.Path], _] = Kafka.sink[UUID, Arena.Path]
-
     // todo: one global source and broadcast to all viewers
 
     val viewerPingSource = Source.repeat {
-      new ProducerRecord(Topics.viewerPing, uuid, arena)
+      new ProducerRecord(Topics.viewerPing, arena, uuid)
     }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
 
     val arenaUpdates: Source[EventSource.Event, _] = {
-      val arenaUpdateSource = Kafka.source[Arena.Path, ArenaDimsAndPlayers](UUID.randomUUID().toString, Topics.arenaUpdate)
+      val arenaUpdateSource = Arena.KafkaSinksAndSources.arenaUpdateSource(uuid.toString)
       arenaUpdateSource.filter(_.key() == arena).map { message =>
         Json.toJson(message.value())
       }.via(EventSource.flow[JsValue])
@@ -72,23 +72,20 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   }
 
   // this endpoint expects the webhook call from google sheets
-  def playersRefresh(arena: Arena.Path) = Action { request =>
-    val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
-
+  def playersRefresh(arena: Arena.Path) = Action.async { request =>
     if (request.headers.get(AUTHORIZATION).contains(googleSheetPlayersConfig.maybePsk.get)) {
       val record = new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
-      Source.single(record).to(playersRefreshSink).run()
-      NoContent
+      Source.single(record).runWith(playersRefreshSink).map { _ =>
+        NoContent
+      }
     }
     else {
-      Unauthorized
+      Future.successful(Unauthorized)
     }
   }
 
   // this endpoint expects the webhook call from github
   def gitHubPlayersRefresh() = Action.async(parse.json) { request =>
-    val playersRefreshSink: Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], _] = Kafka.sink[Arena.Path, PlayersRefresh.type]
-
     val maybeHubSignature = request.headers.get("X-Hub-Signature")
 
     val authorized = maybeHubSignature.fold(true) { hubSignature =>
@@ -112,9 +109,9 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
         new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
       }
 
-      Source(messages).to(playersRefreshSink).run()
-
-      Future.successful(Ok)
+      Source(messages).runWith(playersRefreshSink).map { _ =>
+        Ok
+      }
     }
     else {
       Future.successful(Unauthorized)

@@ -20,16 +20,19 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-import akka.NotUsed
 import akka.actor.ActorSystem
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
+import akka.kafka.scaladsl.Consumer.Control
+import akka.stream.scaladsl.{Sink, Source}
+import akka.{Done, NotUsed}
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.Configuration
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
 import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
-import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Players}
+import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -41,6 +44,36 @@ case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: B
 
 
 object Arena {
+
+  object KafkaSinksAndSources {
+    import services.KafkaSerialization._
+
+    def viewerEventSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, UUID], Future[Done]] = {
+      Kafka.sink[Arena.Path, UUID]
+    }
+
+    def playersRefreshSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], Future[Done]] = {
+      Kafka.sink[Arena.Path, PlayersRefresh.type]
+    }
+
+    def arenaUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaDimsAndPlayers], Future[Done]] = {
+      Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
+    }
+
+
+    def viewerPingSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, UUID], Control] = {
+      Kafka.source[Arena.Path, UUID](groupId, Topics.viewerPing)
+    }
+
+    def playersRefreshSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, PlayersRefresh.type], Control] = {
+      Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh)
+    }
+
+    def arenaUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaDimsAndPlayers], Control] = {
+      Kafka.source[Arena.Path, ArenaDimsAndPlayers](groupId, Topics.arenaUpdate)
+    }
+
+  }
 
   // config
   val throwDistance: Int = 3
@@ -78,7 +111,7 @@ object Arena {
   // if the message is a ping, we make sure the UUID is in the list of viewers
   // if the message is not a ping, we check for viewers who have not pinged in 30 seconds and remove them
   // only emits if the viewers has changed
-  def viewersUpdate(): Either[ConsumerRecord[UUID, Path], NotUsed] => scala.collection.immutable.Iterable[PathedViewers] = {
+  def viewersUpdate(): Either[ConsumerRecord[Path, UUID], NotUsed] => scala.collection.immutable.Iterable[PathedViewers] = {
     var maybeArena: Option[Path] = None
     val viewers = scala.collection.mutable.Map[UUID, Long]()
 
@@ -86,15 +119,15 @@ object Arena {
 
     {
       case Left(record) =>
-        maybeArena = Some(record.value())
+        maybeArena = Some(record.key())
 
-        if (viewers.contains(record.key())) {
-          viewers.update(record.key(), System.currentTimeMillis())
+        if (viewers.contains(record.value())) {
+          viewers.update(record.value(), System.currentTimeMillis())
           noChanges
         }
         else {
-          viewers += record.key() -> System.currentTimeMillis()
-          Seq(PathedViewers(record.value(), viewers.keySet.toSet))
+          viewers += record.value() -> System.currentTimeMillis()
+          Seq(PathedViewers(record.key(), viewers.keySet.toSet))
         }
 
       case Right(_) =>

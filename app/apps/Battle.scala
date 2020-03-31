@@ -16,18 +16,15 @@
 
 package apps
 
-import java.util.UUID
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import models.Arena
 import models.Arena.{ArenaConfigAndPlayers, ArenaState, MaybeViewersAndMaybePlayers, ViewersAndPlayers}
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.libs.ws.ahc.AhcWSClient
-import services.KafkaSerialization._
-import services.{Kafka, Topics}
+import services.Topics
 
 import scala.concurrent.duration._
 
@@ -39,14 +36,14 @@ object Battle extends App {
 
   implicit val wsClient = AhcWSClient()
 
-  // no consumer group partitioning
-  val groupId = UUID.randomUUID().toString
+  val groupId = "battle"
 
+  val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
 
-  val viewerEventsSource = Kafka.source[UUID, Arena.Path](UUID.randomUUID().toString, Topics.viewerPing)
+  val arenaUpdateSink = Arena.KafkaSinksAndSources.arenaUpdateSink
 
   def playersRefreshSource(groupId: String): Source[ArenaConfigAndPlayers, _] = {
-    Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh).mapAsync(Int.MaxValue) { record =>
+    Arena.KafkaSinksAndSources.playersRefreshSource(groupId).mapAsync(Int.MaxValue) { record =>
       Arena.playerService.fetch(record.key())
     }
   }
@@ -83,7 +80,7 @@ object Battle extends App {
     new ProducerRecord(Topics.arenaUpdate, arenaUpdate.path, arenaUpdate.arenaDimsAndPlayers)
   }
 
-  val arenaUpdateSink = Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
+
 
   viewersAndPlayersSource
     .log("viewersAndPlayers")
