@@ -147,8 +147,3 @@ kubectl -n kafka run kafka-consumer -ti --image=strimzi/kafka:0.17.0-kafka-2.4.0
 # Consume messages on a topic:
 kubectl -n kafka run kafka-consumer -ti --image=strimzi/kafka:0.17.0-kafka-2.4.0 --rm=true --restart=Never -- bin/kafka-console-consumer.sh --bootstrap-server cloudbowl-kafka-bootstrap.kafka:9092 --topic $TOPIC --from-beginning --property print.key=true --property key.separator=":"
 ```
-
-## TODO
-
-- Persist arenas
-- Response times in player list
