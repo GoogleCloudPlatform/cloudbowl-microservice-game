@@ -13,7 +13,7 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-Deploy to Standard AppEngine:
+Deploy to AppEngine Standard:
 
 ```bash
 gcloud app deploy
