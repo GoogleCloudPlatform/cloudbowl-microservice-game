@@ -13,6 +13,12 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-Deploy:
+Deploy to Standard AppEngine:
+
+```bash
+gcloud app deploy
+```
+
+Deploy to Cloud Run:
 
 [![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run)
