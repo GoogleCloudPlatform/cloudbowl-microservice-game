@@ -27,7 +27,7 @@ import akka.{Done, NotUsed}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.Configuration
+import play.api.{Configuration, Logger}
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
@@ -44,6 +44,8 @@ case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: B
 
 
 object Arena {
+
+  val logger = Logger("Arena").logger
 
   object KafkaSinksAndSources {
     import services.KafkaSerialization._
@@ -167,6 +169,10 @@ object Arena {
         playerService.fetch(pathedViewers.path)
       } map { arenaConfigAndPlayers =>
         Some(MaybeViewersAndMaybePlayers(pathedViewers.path, Some(pathedViewers.viewers), Some(arenaConfigAndPlayers)))
+      } recover {
+        case t: Throwable =>
+          logger.error(s"Could not fetch arena config and players: ${pathedViewers.path}", t)
+          Option.empty[MaybeViewersAndMaybePlayers]
       }
     }, { arenaConfigAndPlayers =>
       // We have the players, and maybe the viewers

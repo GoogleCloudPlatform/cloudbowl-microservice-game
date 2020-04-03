@@ -88,8 +88,8 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   def gitHubPlayersRefresh() = Action.async(parse.json) { request =>
     val maybeHubSignature = request.headers.get("X-Hub-Signature")
 
-    val authorized = maybeHubSignature.fold(true) { hubSignature =>
-      gitHub.maybePsk.fold(false) { psk =>
+    val authorized = gitHub.maybePsk.fold(true) { psk =>
+      maybeHubSignature.fold(false) { hubSignature =>
         val signingKey = new SecretKeySpec(psk.getBytes(), "HmacSHA1")
         val mac = Mac.getInstance("HmacSHA1")
         mac.init(signingKey)
@@ -102,7 +102,9 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
     if (authorized) {
       val arenas = (request.body \ "commits").as[Seq[JsObject]].foldLeft(Set.empty[String]) { case (arenasChanged, commit) =>
         val filesChanged = (commit \ "added").as[Set[String]] ++ (commit \ "removed").as[Set[String]] ++ (commit \ "modified").as[Set[String]]
-        arenasChanged ++ filesChanged.map(_.stripSuffix(".json"))
+        arenasChanged ++ filesChanged.collect {
+          case s if s.endsWith(".json") => s.stripSuffix(".json")
+        }
       }
 
       val messages = arenas.map { arena =>
