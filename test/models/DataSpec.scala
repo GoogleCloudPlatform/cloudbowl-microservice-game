@@ -84,4 +84,37 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
     }
   }
 
+  "a player throwing" must {
+    "must not hit more than one other player" in {
+      val player1 = Player("http://foo", "foo", new URL("http://foo"))
+      val player2 = Player("http://bar", "bar", new URL("http://bar"))
+      val player3 = Player("http://baz", "baz", new URL("http://baz"))
+      val player1State = PlayerState(0, 0, Direction.S, false, 0)
+      val player2State = PlayerState(0, 1, Direction.N, false, 0)
+      val player3State = PlayerState(0, 2, Direction.N, false, 0)
+
+      val playerStates = Map(player1.service -> player1State, player2.service -> player2State, player3.service -> player3State)
+
+      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2, player3), playerStates)
+
+      // if wasHit was true, then move forward, otherwise do nothing
+      val newState = await {
+        Arena.updateArena(initState) { (_, player) =>
+          Future.successful {
+            if (player == player1) {
+              Some(Throw -> Duration.Zero)
+            }
+            else {
+              None
+            }
+          }
+        }
+      }
+
+      newState.playerStates(player1.service).wasHit must equal (false)
+      newState.playerStates(player2.service).wasHit must equal (true)
+      newState.playerStates(player3.service).wasHit must equal (false)
+    }
+  }
+
 }
