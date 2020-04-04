@@ -24,6 +24,7 @@ import akka.actor.ActorSystem
 import akka.kafka.scaladsl.Consumer.Control
 import akka.stream.scaladsl.{Sink, Source}
 import akka.{Done, NotUsed}
+import models.Direction.Direction
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -221,7 +222,7 @@ object Arena {
   // }
   //
   def playerMoveWs(arena: Map[Player.Service, PlayerState], player: Player)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[(Move, FiniteDuration)]] = {
-    implicit val playerStateWrites: Writes[PlayerState] = PlayerState.jsonWrites
+    import PlayerState.jsonWrites
 
     val dims = calcDimensions(arena.keys.size)
 
@@ -478,7 +479,18 @@ object Direction {
 }
 
 object PlayerState {
-  implicit val jsonWrites = Json.writes[PlayerState]
+  import play.api.libs.json._
+  import play.api.libs.functional.syntax._
+
+  implicit val jsonWrites: Writes[PlayerState] = (
+      (__ \ "x").write[Int] ~
+      (__ \ "y").write[Int] ~
+      (__ \ "direction").write[Direction] ~
+      (__ \ "wasHit").write[Boolean] ~
+      (__ \ "score").write[Int]
+    ) { playerState: PlayerState =>
+    (playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score)
+  }
 }
 
 sealed abstract class Move(val command: Char)
