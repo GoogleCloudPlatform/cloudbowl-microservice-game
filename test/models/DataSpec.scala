@@ -24,7 +24,7 @@ import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import play.api.test.Helpers._
 
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 
 class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
@@ -54,9 +54,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
       newState.playerStates(player.service).y must equal (1)
     }
-  }
 
-  "wasHit" must {
     "be accurate" in {
       val player1 = Player("http://foo", "foo", new URL("http://foo"))
       val player2 = Player("http://bar", "bar", new URL("http://bar"))
@@ -80,6 +78,38 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
       }
 
       newState.playerStates(player1.service).wasHit must equal (false)
+      newState.playerStates(player2.service).wasHit must equal (true)
+    }
+  }
+
+  "two players throwing at each other" must {
+    "only award the player with the lowest latency" in {
+      val player1 = Player("http://foo", "foo", new URL("http://foo"))
+      val player2 = Player("http://bar", "bar", new URL("http://bar"))
+      val player1State = PlayerState(0, 0, Direction.S, false, 0)
+      val player2State = PlayerState(0, 1, Direction.N, false, 0)
+
+      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2), Map(player1.service -> player1State, player2.service -> player2State))
+
+      // if wasHit was true, then move forward, otherwise do nothing
+      val newState = await {
+        Arena.updateArena(initState) { (_, player) =>
+          Future.successful {
+            val latency = if (player == player1) {
+              1.seconds
+            }
+            else {
+              2.seconds
+            }
+
+            Some(Throw -> latency)
+          }
+        }
+      }
+
+      newState.playerStates(player1.service).score must equal (1)
+      newState.playerStates(player1.service).wasHit must equal (false)
+      newState.playerStates(player2.service).score must equal (-1)
       newState.playerStates(player2.service).wasHit must equal (true)
     }
   }

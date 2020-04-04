@@ -27,11 +27,11 @@ import akka.{Done, NotUsed}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.{Configuration, Logger}
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
 import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
+import play.api.{Configuration, Logger}
 import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
 
 import scala.concurrent.duration._
@@ -40,7 +40,7 @@ import scala.util.Random
 
 case class Player(service: Player.Service, name: String, pic: URL)
 
-case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean, score: Int)
+case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean, score: Int, hitBy: Set[Player.Service] = Set.empty)
 
 
 object Arena {
@@ -280,7 +280,7 @@ object Arena {
 
     val spot = Random.shuffle(open).head
 
-    arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0))
+    arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0, Set.empty))
   }
 
   def forward(playerState: PlayerState, num: Int): Position = {
@@ -321,11 +321,17 @@ object Arena {
         val target = forward(playerState, distance)
         val maybeHitPlayer = current.find(isPlayerInPosition(target))
         maybeHitPlayer.fold(current -> false) { case (hitPlayer, hitPlayerState) =>
-          val updatedPlayerStates = current
-            .updated(hitPlayer, hitPlayerState.copy(wasHit = true, score = hitPlayerState.score - 1))
-            .updated(player, playerState.copy(score = playerState.score + 1))
+          if (playerState.hitBy.contains(hitPlayer)) {
+            // this player can't hit a player who already hit them
+            current -> true
+          }
+          else {
+            val updatedPlayerStates = current
+              .updated(hitPlayer, hitPlayerState.copy(wasHit = true, score = hitPlayerState.score - 1, hitBy = hitPlayerState.hitBy + player))
+              .updated(player, playerState.copy(score = playerState.score + 1))
 
-          updatedPlayerStates -> true
+            updatedPlayerStates -> true
+          }
         }
       }
     }._1
@@ -336,7 +342,7 @@ object Arena {
 
     val movesByShortest = moves.toSeq.sortBy(_._2._2)
 
-    val arenaWithResetHits = currentArena.view.mapValues(_.copy(wasHit = false)).toMap
+    val arenaWithResetHits = currentArena.view.mapValues(_.copy(wasHit = false, hitBy = Set.empty)).toMap
 
     movesByShortest.foldLeft(arenaWithResetHits) { case (arena, (player, (move, _))) =>
       arena.get(player).fold(arena) { currentPlayerState =>
