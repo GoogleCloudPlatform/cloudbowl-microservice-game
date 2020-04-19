@@ -124,6 +124,16 @@ document.addEventListener('DOMContentLoaded', () => {
             name.className = 'name';
             scoreLine.appendChild(name);
 
+            const responseTime = document.createElement('span');
+            if (player.responseTimeMS !== undefined) {
+              responseTime.innerText = player.responseTimeMS + 'ms';
+            }
+            else {
+              responseTime.innerText = "error";
+            }
+            responseTime.className = 'responseTime';
+            scoreLine.appendChild(responseTime);
+
             const score = document.createElement('span');
             score.innerText = player.score;
             score.className = 'num';

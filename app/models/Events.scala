@@ -45,11 +45,12 @@ object Events {
     (__ \ "y").write[Int] ~
     (__ \ "direction").write[Direction] ~
     (__ \ "wasHit").write[Boolean] ~
-    (__ \ "score").write[Int]
+    (__ \ "score").write[Int] ~
+    (__ \ "responseTimeMS").writeNullable[Long]
   ) { playerPlayerState: (Player, PlayerState) =>
     val (player, playerState) = playerPlayerState
 
-    (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score)
+    (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score, playerState.responseTime.map(_.toMillis))
   }
 
   implicit val arenaDimsAndPlayersWrites = (

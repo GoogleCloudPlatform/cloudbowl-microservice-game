@@ -74,8 +74,19 @@ body {
     margin-bottom: auto;
 }
 
+.score > .responseTime {
+    min-width: 20px;
+    max-width: 20px;
+    text-align: right;
+    margin-right: 15px;
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
 .score > .num {
-    width: 20px;
+    min-width: 35px;
+    max-width: 35px;
+    text-align: right;
     margin-top: auto;
     margin-bottom: auto;
 }

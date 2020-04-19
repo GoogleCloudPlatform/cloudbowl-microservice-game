@@ -41,7 +41,7 @@ import scala.util.Random
 
 case class Player(service: Player.Service, name: String, pic: URL)
 
-case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean, score: Int, hitBy: Set[Player.Service] = Set.empty)
+case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: Boolean, score: Int, hitBy: Set[Player.Service] = Set.empty, responseTime: Option[FiniteDuration] = None)
 
 
 object Arena {
@@ -343,21 +343,24 @@ object Arena {
 
     val movesByShortest = moves.toSeq.sortBy(_._2._2)
 
-    val arenaWithResetHits = currentArena.view.mapValues(_.copy(wasHit = false, hitBy = Set.empty)).toMap
+    val arenaWithResetHits = currentArena.view.mapValues(_.copy(wasHit = false, hitBy = Set.empty, responseTime = None)).toMap
 
-    movesByShortest.foldLeft(arenaWithResetHits) { case (arena, (player, (move, _))) =>
+    movesByShortest.foldLeft(arenaWithResetHits) { case (arena, (player, (move, responseTime))) =>
       arena.get(player).fold(arena) { currentPlayerState =>
+        val currentPlayerStateUpdatedWithResponseTime = currentPlayerState.copy(responseTime = Some(responseTime))
+        val arenaWithUpdatedResponseTime = arena.updated(player, currentPlayerStateUpdatedWithResponseTime)
+
         move match {
           case TurnLeft =>
-            val newPlayerState = currentPlayerState.copy(direction = Direction.left(currentPlayerState.direction))
-            arena.updated(player, newPlayerState)
+            val newPlayerState = currentPlayerStateUpdatedWithResponseTime.copy(direction = Direction.left(currentPlayerStateUpdatedWithResponseTime.direction))
+            arenaWithUpdatedResponseTime.updated(player, newPlayerState)
           case TurnRight =>
-            val newPlayerState = currentPlayerState.copy(direction = Direction.right(currentPlayerState.direction))
-            arena.updated(player, newPlayerState)
+            val newPlayerState = currentPlayerStateUpdatedWithResponseTime.copy(direction = Direction.right(currentPlayerStateUpdatedWithResponseTime.direction))
+            arenaWithUpdatedResponseTime.updated(player, newPlayerState)
           case Forward =>
-            movePlayerForward(arena, player, currentPlayerState)
+            movePlayerForward(arenaWithUpdatedResponseTime, player, currentPlayerStateUpdatedWithResponseTime)
           case Throw =>
-            playerThrow(arena, player, currentPlayerState)
+            playerThrow(arenaWithUpdatedResponseTime, player, currentPlayerStateUpdatedWithResponseTime)
         }
       }
     }
