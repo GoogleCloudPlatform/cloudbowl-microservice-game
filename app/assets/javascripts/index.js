@@ -35,18 +35,29 @@ function clear(parent, maybeChildClassName, removeChild) {
 document.addEventListener('DOMContentLoaded', () => {
 
   const body = document.querySelector('body');
-
+  const title = document.getElementById('title');
+  const modal = document.getElementById('modal');
+  const message = document.getElementById('message');
   const maybeUpdatesUrl = body.dataset.updatesurl;
 
+  window.setTimeout(() => {
+    if (title.innerText === '') {
+      message.innerText = 'Error Loading Arena';
+      Array.from(document.getElementsByClassName('lds-ring')).forEach(it => it.remove());
+    }
+  }, 30 * 1000);
+
   if (!!window.EventSource && !!maybeUpdatesUrl) {
-    const title = document.getElementById('title');
     const arena = document.getElementById('arena');
     const scoreboard = document.getElementById('scoreboard');
+
 
     function eventSource() {
       const stringSource = new EventSource(maybeUpdatesUrl);
       stringSource.onopen = () => { };
       stringSource.onmessage = (message) => {
+        modal.style.visibility = 'hidden';
+
         if (body.dataset.paused !== 'true') {
           const data = JSON.parse(message.data);
           //console.log(data);
@@ -107,8 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cell.appendChild(img);
 
             if (player.wasHit) {
-              cell.style.cssText = "--emoji: url(https://noto-website-2.storage.googleapis.com/emoji/emoji_u"+data.emoji_code+".png);";
-              cell.className = cell.className + " hit";
+              cell.style.cssText = '--emoji: url(https://noto-website-2.storage.googleapis.com/emoji/emoji_u' + data.emoji_code.toLowerCase() + '.png);';
+              cell.className = cell.className + ' hit';
             }
 
             // scores
@@ -129,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
               responseTime.innerText = player.responseTimeMS + 'ms';
             }
             else {
-              responseTime.innerText = "error";
+              responseTime.innerText = 'error';
             }
             responseTime.className = 'responseTime';
             scoreLine.appendChild(responseTime);

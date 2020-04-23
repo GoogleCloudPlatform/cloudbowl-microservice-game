@@ -58,7 +58,7 @@ class DevPlayers extends Players {
 
 class GoogleSheetPlayersConfig @Inject()(configuration: Configuration) {
   val maybePrivateKeyId = configuration.getOptional[String]("players.sheet.privateKeyId").filter(_.nonEmpty)
-  val maybePrivateKey = configuration.getOptional[String]("players.sheet.privateKey").filter(_.nonEmpty).map(_.replaceAllLiterally("\\n", "\n"))
+  val maybePrivateKey = configuration.getOptional[String]("players.sheet.privateKey").filter(_.nonEmpty).map(_.replace("\\n", "\n"))
   val maybeClientEmail = configuration.getOptional[String]("players.sheet.clientEmail").filter(_.nonEmpty)
 
   val maybePsk = configuration.getOptional[String]("players.sheet.psk").filter(_.nonEmpty)

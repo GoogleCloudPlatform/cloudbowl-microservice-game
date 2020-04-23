@@ -5,7 +5,7 @@ enablePlugins(PlayScala, AutomateHeaderPlugin)
 
 name := "cloudbowl"
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.13.2"
 
 resolvers += Resolver.mavenLocal
 
@@ -31,6 +31,7 @@ scalacOptions ++= Seq(
   "-deprecation",
   "-explaintypes",
   "-feature",
+  "-Wconf:any:error",
   "-Xcheckinit",
   //"-Xlog-implicits",
   "-Xfatal-warnings",
