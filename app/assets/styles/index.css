@@ -45,7 +45,7 @@ body {
 }
 
 #scoreboard {
-    width: 300px;
+    width: 340px;
     padding-left: 20px;
 }
 
@@ -56,7 +56,7 @@ body {
 
 .score {
     display: flex;
-    padding: 10px;
+    padding-top: 10px;
 }
 
 .score > img {
