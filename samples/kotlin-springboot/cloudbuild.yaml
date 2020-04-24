@@ -1,5 +1,6 @@
 steps:
-- name: 'gcr.io/cloudrun/pack'
+- name: 'gcr.io/k8s-skaffold/pack'
+  entrypoint: 'pack'
   args: ['build', '--builder=heroku/buildpacks:18', '--path', 'samples/kotlin-springboot', '--publish', 'gcr.io/$PROJECT_ID/cloudbowl-samples-kotlin-springboot:$COMMIT_SHA']
 
 - name: 'gcr.io/cloud-builders/gcloud'
