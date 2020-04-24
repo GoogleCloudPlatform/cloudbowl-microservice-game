@@ -1,7 +1,7 @@
-Cloud Bowl Sample - Java Spring Boot
-------------------------------------
+Cloud Bowl Sample - Kotlin Spring Boot
+--------------------------------------
 
-To make changes, edit the `src/hello.main/java/hello/Application.java` file.
+To make changes, edit the `src/main/kotlin/hello/KotlinApplication.kt` file.
 
 Run Locally:
 ```
