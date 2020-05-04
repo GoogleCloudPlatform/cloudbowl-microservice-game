@@ -42,9 +42,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const maybeUpdatesUrl = body.dataset.updatesurl;
 
   const fixSize = () => {
-    document.documentElement.style.height = `${window.innerHeight}px`;
-    body.style.height = `${window.innerHeight}px`;
-    modal.style.height = `${window.innerHeight}px`;
+    if (window.innerWidth > 600) {
+      document.documentElement.style.height = `${window.innerHeight}px`;
+      body.style.height = `${window.innerHeight}px`;
+      modal.style.height = `${window.innerHeight}px`;
+    }
+    else {
+      // if the device rotates, we need to reset these
+      document.documentElement.style.height = null;
+      body.style.height = null;
+      modal.style.height = null;
+    }
   };
   window.addEventListener('resize', fixSize);
   fixSize();
