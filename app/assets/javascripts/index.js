@@ -33,12 +33,21 @@ function clear(parent, maybeChildClassName, removeChild) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-
-  const body = document.querySelector('body');
+  const body = document.body;
   const title = document.getElementById('title');
   const modal = document.getElementById('modal');
   const message = document.getElementById('message');
+  const arena = document.getElementById('arena');
+  const scoreboard = document.getElementById('scoreboard');
   const maybeUpdatesUrl = body.dataset.updatesurl;
+
+  const fixSize = () => {
+    document.documentElement.style.height = `${window.innerHeight}px`;
+    body.style.height = `${window.innerHeight}px`;
+    modal.style.height = `${window.innerHeight}px`;
+  };
+  window.addEventListener('resize', fixSize);
+  fixSize();
 
   window.setTimeout(() => {
     if (title.innerText === '') {
@@ -47,20 +56,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 30 * 1000);
 
+  //body.dataset.paused = 'true';
+
   if (!!window.EventSource && !!maybeUpdatesUrl) {
-    const arena = document.getElementById('arena');
-    const scoreboard = document.getElementById('scoreboard');
-
-
     function eventSource() {
       const stringSource = new EventSource(maybeUpdatesUrl);
       stringSource.onopen = () => { };
       stringSource.onmessage = (message) => {
-        modal.style.visibility = 'hidden';
+        fixSize();
 
         if (body.dataset.paused !== 'true') {
           const data = JSON.parse(message.data);
           //console.log(data);
+
+          modal.style.visibility = 'hidden';
 
           title.textContent = data.name;
 
@@ -73,7 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // arena setup
             clear(arena);
 
-            arena.style.gridTemplateColumns = 'repeat(' + data.width + ', 1fr)';
+            arena.style.gridTemplateColumns = `repeat(${data.width}, 1fr)`;
+            arena.style.gridTemplateRows = `repeat(${data.height}, 1fr)`;
 
             for (let y = 0; y < data.height; y++) {
               for (let x = 0; x < data.width; x++) {
@@ -85,12 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
 
-
           clear(arena, 'cell');
-          Array.prototype.slice.call(arena.getElementsByClassName('cell')).forEach(cell => cell.className = 'cell');
+
+          Array.prototype.slice.call(arena.getElementsByClassName('cell')).forEach(cell => {
+            cell.className = 'cell'; // reset hits
+          });
 
           clear(scoreboard, 'score', true);
-
 
           const sortPlayersByScore = (player1, player2) => player2[1].score - player1[1].score;
 
@@ -99,8 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // profile image on grid
             const cell = document.getElementById(player.x + '-' + player.y);
-            const img = document.createElement('img');
-            img.src = player.pic;
+            const img = document.createElement('div');
             switch (player.direction) {
               case 'N':
                 img.className = 'pic direction-n';
@@ -115,6 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.className = 'pic direction-e';
                 break;
             }
+
+            img.style.backgroundImage = `url("${player.pic}")`;
+
             cell.appendChild(img);
 
             if (player.wasHit) {

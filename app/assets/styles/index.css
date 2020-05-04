@@ -14,53 +14,71 @@
  * limitations under the License.
  */
 
+@supports(padding:max(0px)) {
+    body, header, footer {
+        padding-left: min(0vmin, env(safe-area-inset-left));
+        padding-right: min(0vmin, env(safe-area-inset-right));
+    }
+}
+
 html {
+    width: 100%;
     height: 100%;
+    overflow-y: hidden;
+    touch-action: none;
     font-family: monospace;
 }
 
 body {
-    display: flex;
-    flex-direction: column;
+    width: 100%;
     height: 100%;
+    touch-action: none;
     margin: 0;
+    padding-top: 10px;
+    padding-left: 10px;
+    padding-bottom: 10px;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-areas: "title scoreboard-title" "arena scoreboard";
+    grid-template-columns: auto 250px;
+    grid-template-rows: auto 1fr;
+    grid-gap: 10px;
 }
 
 #title {
-    padding: 10px;
+    grid-area: title;
     font-size: 32pt;
 }
 
-#main {
-    display: flex;
-    height: 100%;
-    padding: 10px;
+/* make sure the notch doesn't cover the title */
+@media only screen and (orientation: landscape) {
+    #title {
+        padding-left: env(safe-area-inset-left);
+    }
 }
 
-#arena {
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-gap: 1px;
+#scoreboardTitle {
+    grid-area: scoreboard-title;
+    font-size: 24pt;
+    font-weight: bold;
+    display: flex;
+    align-self: flex-end;
 }
 
 #scoreboard {
-    width: 340px;
-    padding-left: 20px;
-}
-
-#scoreboard > span {
-    font-size: 24pt;
-    font-weight: bold;
+    grid-area: scoreboard;
+    overflow-y: auto;
+    padding-right: 10px;
 }
 
 .score {
     display: flex;
-    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .score > img {
-    width: 40px;
+    max-height: 40px;
+    max-width: 40px;
     padding-right: 10px;
 }
 
@@ -91,19 +109,33 @@ body {
     margin-bottom: auto;
 }
 
-.cell {
+#arenaWrapper {
+
+}
+
+#arena {
+    grid-area: arena;
+
     width: 100%;
+    height: 100%;
+    display: grid;
+    grid-gap: 1px;
+}
+
+.cell {
     outline: 1px dashed #cccccc;
+
 }
 
 .pic {
-    object-fit: contain;
-    display: block;
     height: 100%;
-    max-height: 100%;
+    width: 100%;
     max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
+    max-height: 100%;
+    overflow: hidden;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
 }
 
 .direction-n {
@@ -134,7 +166,6 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    /* background-image: url("https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f351.png"); */
     background-image: var(--emoji);
     background-repeat: no-repeat;
     background-position: center;
