@@ -124,6 +124,11 @@ metadata:
   name: cloudbowl-web
 spec:
   template:
+    metadata:
+      name: $COMMIT_SHA
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
     spec:
       containers:
       - image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
@@ -151,10 +156,3 @@ spec:
           limits:
             cpu: "2"
             memory: 1Gi
-    metadata:
-      annotations:
-#        autoscaling.knative.dev/class: hpa.autoscaling.knative.dev
-#        autoscaling.knative.dev/metric: cpu
-#        autoscaling.knative.dev/target: "75"
-        autoscaling.knative.dev/minScale: "1"
-        autoscaling.knative.dev/maxScale: "10"
