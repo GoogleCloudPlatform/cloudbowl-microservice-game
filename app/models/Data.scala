@@ -17,6 +17,7 @@
 package models
 
 import java.net.URL
+import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -25,18 +26,20 @@ import akka.kafka.scaladsl.Consumer.Control
 import akka.stream.scaladsl.{Sink, Source}
 import akka.{Done, NotUsed}
 import models.Direction.Direction
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh}
+import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh, ScoresReset}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
 import play.api.http.Status
 import play.api.libs.json.{JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
 import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
 import play.api.{Configuration, Logger}
-import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players, Topics}
+import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.DurationConverters._
 import scala.util.Random
 
 case class Player(service: Player.Service, name: String, pic: URL)
@@ -48,32 +51,75 @@ object Arena {
 
   val logger = Logger("Arena").logger
 
-  object KafkaSinksAndSources {
-    import services.KafkaSerialization._
+  object KafkaConfig {
 
-    def viewerEventSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, UUID], Future[Done]] = {
-      Kafka.sink[Arena.Path, UUID]
+    object Topics {
+      val playersRefresh = "players-refresh"
+      val viewerPing = "viewer-ping"
+      val arenaUpdate = "arena-update"
+      val scoresReset = "scores-reset"
     }
 
-    def playersRefreshSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], Future[Done]] = {
-      Kafka.sink[Arena.Path, PlayersRefresh.type]
+    object Serialization {
+
+      import upickle.default._
+
+      implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
+      implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
+      implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
+      implicit val playerReadWriter: ReadWriter[Player] = macroRW
+      implicit val dimensionsWriter: ReadWriter[Dimensions] = macroRW
+      implicit val arenaDimsAndPlayersWriter: ReadWriter[ArenaDimsAndPlayers] = macroRW
+
+
+      implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
+      implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => readBinary[PlayersRefresh.type](data)
+      implicit val arenaDimsAndPlayersDeserializer: Deserializer[ArenaDimsAndPlayers] = (_: String, data: Array[Byte]) => readBinary[ArenaDimsAndPlayers](data)
+      implicit val uuidDeserializer: Deserializer[UUID] = new UUIDDeserializer
+      implicit val scoresResetDeserializer: Deserializer[ScoresReset.type] = (_: String, data: Array[Byte]) => readBinary[ScoresReset.type](data)
+
+      implicit val uuidSerializer: Serializer[UUID] = new UUIDSerializer
+      implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
+      implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => writeBinary[ArenaDimsAndPlayers](data)
+      implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => writeBinary[PlayersRefresh.type](data)
+      implicit val scoresResetSerializer: Serializer[ScoresReset.type] = (_: String, data: ScoresReset.type) => writeBinary[ScoresReset.type](data)
+
     }
 
-    def arenaUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaDimsAndPlayers], Future[Done]] = {
-      Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
-    }
+    object SinksAndSources {
+      import Serialization._
 
+      def viewerEventSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, UUID], Future[Done]] = {
+        Kafka.sink[Arena.Path, UUID]
+      }
 
-    def viewerPingSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, UUID], Control] = {
-      Kafka.source[Arena.Path, UUID](groupId, Topics.viewerPing)
-    }
+      def playersRefreshSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], Future[Done]] = {
+        Kafka.sink[Arena.Path, PlayersRefresh.type]
+      }
 
-    def playersRefreshSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, PlayersRefresh.type], Control] = {
-      Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh)
-    }
+      def arenaUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaDimsAndPlayers], Future[Done]] = {
+        Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
+      }
 
-    def arenaUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaDimsAndPlayers], Control] = {
-      Kafka.source[Arena.Path, ArenaDimsAndPlayers](groupId, Topics.arenaUpdate)
+      def scoresResetSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ScoresReset.type], Future[Done]] = {
+        Kafka.sink[Arena.Path, ScoresReset.type]
+      }
+
+      def viewerPingSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, UUID], Control] = {
+        Kafka.source[Arena.Path, UUID](groupId, Topics.viewerPing)
+      }
+
+      def playersRefreshSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, PlayersRefresh.type], Control] = {
+        Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh)
+      }
+
+      def arenaUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaDimsAndPlayers], Control] = {
+        Kafka.source[Arena.Path, ArenaDimsAndPlayers](groupId, Topics.arenaUpdate)
+      }
+
+      def scoresResetSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ScoresReset.type], Control] = {
+        Kafka.source[Arena.Path, ScoresReset.type](groupId, Topics.scoresReset)
+      }
     }
 
   }
@@ -82,6 +128,7 @@ object Arena {
   val throwDistance: Int = 3
   val fullness: Double = 0.15
   val aspectRatio: Double = 4.0 / 3.0
+  val resetLimit: FiniteDuration = 5.minutes
   // config
 
 
@@ -89,14 +136,16 @@ object Arena {
   type Path = String
   type EmojiCode = String
 
-  // todo: refactor to case classes
-  case class PathedViewers(path: Path, viewers: Set[UUID])
-  case class PathedPlayers(path: Path, players: Set[Player])
+  sealed trait Pathed {
+    val path: Path
+  }
+
+  case class PathedArenaRefresh(path: Path) extends Pathed
+  case class PathedPlayersRefresh(path: Path) extends Pathed
+  case class PathedScoresReset(path: Path) extends Pathed
+
   case class ArenaConfigAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, players: Set[Player])
-  type ViewersOrPlayers = Either[PathedViewers, ArenaConfigAndPlayers]
-  case class MaybeViewersAndMaybePlayers(path: Path, maybeViewers: Option[Set[UUID]], maybeArenaConfigAndPlayers: Option[ArenaConfigAndPlayers])
-  case class ViewersAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player])
-  case class ArenaState(path: Path, name: Name, emojiCode: EmojiCode, viewers: Set[UUID], players: Set[Player], playerStates: Map[Player.Service, PlayerState])
+  case class ArenaState(config: ArenaConfigAndPlayers, state: Map[Player.Service, PlayerState], startTime: ZonedDateTime)
 
   case class ResponseWithDuration(response: StandaloneWSResponse, duration: FiniteDuration) extends StandaloneAhcWSResponse(response.underlying[play.shaded.ahc.org.asynchttpclient.Response])
 
@@ -110,44 +159,25 @@ object Arena {
     Dimensions(width, height.toInt)
   }
 
-  // keeps track of the viewers
-  // if the message is a ping, we make sure the UUID is in the list of viewers
-  // if the message is not a ping, we check for viewers who have not pinged in 30 seconds and remove them
-  // only emits if the viewers has changed
-  def viewersUpdate(): Either[ConsumerRecord[Path, UUID], NotUsed] => scala.collection.immutable.Iterable[PathedViewers] = {
-    var maybeArena: Option[Path] = None
-    val viewers = scala.collection.mutable.Map[UUID, Long]()
-
-    val noChanges = Seq.empty[PathedViewers]
+  def hasViewers(): Either[Path, NotUsed] => scala.collection.immutable.Iterable[PathedArenaRefresh] = {
+    var maybeState = Option.empty[(PathedArenaRefresh, ZonedDateTime)]
 
     {
-      case Left(record) =>
-        maybeArena = Some(record.key())
-
-        if (viewers.contains(record.value())) {
-          viewers.update(record.value(), System.currentTimeMillis())
-          noChanges
-        }
-        else {
-          viewers += record.value() -> System.currentTimeMillis()
-          Seq(PathedViewers(record.key(), viewers.keySet.toSet))
-        }
+      case Left(path) =>
+        val pathedArenaRefresh = PathedArenaRefresh(path)
+        maybeState = Some((pathedArenaRefresh, ZonedDateTime.now))
+        maybeState.map(_._1).toSeq
 
       case Right(_) =>
-        maybeArena.fold(noChanges) { arena =>
-          val now = System.currentTimeMillis()
-          val viewersToPurge = viewers.filter { case (_, lastPing) =>
-            lastPing < (now - (1000 * 30))
-          }
-
-          if (viewersToPurge.isEmpty) {
-            noChanges
+        maybeState.flatMap { case (pathedArenaRefresh, lastPing) =>
+          val sinceLastPing = java.time.Duration.between(lastPing, ZonedDateTime.now()).toScala
+          if (sinceLastPing.gt(30.seconds)) {
+            None
           }
           else {
-            viewers --= viewersToPurge.keys
-            Seq(PathedViewers(arena, viewers.keySet.toSet))
+            Some(pathedArenaRefresh)
           }
-        }
+        }.toSeq
     }
   }
 
@@ -163,41 +193,38 @@ object Arena {
       new DevPlayers
   }
 
-  def updatePlayers(arenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers], viewersOrPlayers: ViewersOrPlayers)(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Future[Option[MaybeViewersAndMaybePlayers]] = {
-    viewersOrPlayers.fold({ pathedViewers =>
-      // We have the viewers, if we don't have the players, fetch them
-      arenaViewersAndPlayers.flatMap(_.maybeArenaConfigAndPlayers).map(Future.successful).getOrElse {
-        playerService.fetch(pathedViewers.path)
-      } map { arenaConfigAndPlayers =>
-        Some(MaybeViewersAndMaybePlayers(pathedViewers.path, Some(pathedViewers.viewers), Some(arenaConfigAndPlayers)))
-      } recover {
-        case t: Throwable =>
-          logger.error(s"Could not fetch arena config and players: ${pathedViewers.path}", t)
-          Option.empty[MaybeViewersAndMaybePlayers]
-      }
-    }, { arenaConfigAndPlayers =>
-      // We have the players, and maybe the viewers
-      Future.successful {
-        Some(MaybeViewersAndMaybePlayers(arenaConfigAndPlayers.path, arenaViewersAndPlayers.flatMap(_.maybeViewers), Some(arenaConfigAndPlayers)))
-      }
-    })
-  }
+  def processArenaEvent(state: Option[ArenaState], pathed: Pathed)
+                       (implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Future[Option[ArenaState]] = {
 
-  def arenaPathFromViewerOrPlayers(viewersOrPlayers: ViewersOrPlayers): Path = {
-    viewersOrPlayers match {
-      case Left(PathedViewers(path, _)) => path
-      case Right(ArenaConfigAndPlayers(path, _, _, _)) => path
+    def freshArenaState(config: ArenaConfigAndPlayers): ArenaState = {
+      ArenaState(config, Map.empty[Player.Service, PlayerState], ZonedDateTime.now())
     }
-  }
 
-  def onlyArenasWithViewersAndPlayers(maybeArenaViewersAndPlayers: Option[MaybeViewersAndMaybePlayers]): scala.collection.immutable.Iterable[ViewersAndPlayers] = {
-    val maybe = for {
-      arenaViewersAndPlayers <- maybeArenaViewersAndPlayers
-      viewers <- arenaViewersAndPlayers.maybeViewers
-      ArenaConfigAndPlayers(_, name, emojiCode, players) <- arenaViewersAndPlayers.maybeArenaConfigAndPlayers
-    } yield ViewersAndPlayers(arenaViewersAndPlayers.path, name, emojiCode, viewers, players)
+    def initArena(path: Path): Future[Option[ArenaState]] = {
+      Arena.playerService.fetch(path).flatMap { config =>
+        performArenaUpdate(freshArenaState(config))
+      }
+    }
 
-    maybe.toList
+    pathed match {
+      case PathedPlayersRefresh(path) =>
+        initArena(path)
+
+      case PathedArenaRefresh(path) =>
+        // if we need to refresh the arena but don't have the players yet, then do it
+        state.fold(initArena(path))(performArenaUpdate)
+
+      case PathedScoresReset(_) =>
+        state.fold(Future.successful(Option.empty[ArenaState])) { arenaState =>
+          val resetAgo = java.time.Duration.between(arenaState.startTime, ZonedDateTime.now()).toScala
+          if (resetAgo.gt(resetLimit)) {
+            performArenaUpdate(freshArenaState(arenaState.config))
+          }
+          else {
+            Future.successful(Some(arenaState))
+          }
+        }
+    }
   }
 
   // always returns a successful future
@@ -370,11 +397,11 @@ object Arena {
                  (playerMove: (Map[Player.Service, PlayerState], Player) => Future[Option[(Move, FiniteDuration)]])
                  (implicit ec: ExecutionContext): Future[ArenaState] = {
 
-    val stateWithGonePlayersRemoved = current.playerStates.view.filterKeys(current.players.map(_.service).contains)
+    val stateWithGonePlayersRemoved = current.state.view.filterKeys(current.config.players.map(_.service).contains)
 
-    val readyArena = current.players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
+    val readyArena = current.config.players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
       currentState.get(player.service).fold {
-        addPlayerToArena(currentState, current.players, player.service)
+        addPlayerToArena(currentState, current.config.players, player.service)
       } { playerState =>
         currentState.updated(player.service, playerState)
       }
@@ -390,7 +417,7 @@ object Arena {
     }
     // wtf
 
-    val playerMovesFutures = current.players.map { player =>
+    val playerMovesFutures = current.config.players.map { player =>
       playerMove(readyArena, player).map(player.service -> _)
     }
 
@@ -401,41 +428,24 @@ object Arena {
       }
     }
 
-    val updatedArena = playerMovesFuture.map(performMoves(readyArena))
-
-    updatedArena.map(ArenaState(current.path, current.name, current.emojiCode, current.viewers, current.players, _))
+    playerMovesFuture.map(performMoves(readyArena)).map(state => current.copy(state = state))
   }
 
   def arenaStateToArenaUpdate(arenaState: ArenaState): ArenaUpdate = {
-    val playersStates = arenaState.players.flatMap { player =>
-      arenaState.playerStates.get(player.service).map(player -> _)
+    val playersStates = arenaState.config.players.flatMap { player =>
+      arenaState.state.get(player.service).map(player -> _)
     }.toMap
 
-    ArenaUpdate(arenaState.path, ArenaDimsAndPlayers(arenaState.name, arenaState.emojiCode, calcDimensions(arenaState.players.size), playersStates))
+    val canResetIn = resetLimit - java.time.Duration.between(arenaState.startTime, ZonedDateTime.now()).toScala
+
+    ArenaUpdate(arenaState.config.path, ArenaDimsAndPlayers(arenaState.config.name, arenaState.config.emojiCode, calcDimensions(arenaState.state.size), playersStates, canResetIn))
   }
 
-  def performArenaUpdate(maybeArenaState: Option[ArenaState], data: (ViewersAndPlayers, NotUsed))(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
-    val (viewersAndPlayers, _) = data
-
-    val arenaState = maybeArenaState.flatMap { arenaState =>
-      if (arenaState.players == viewersAndPlayers.players) {
-        // update the viewers
-        Some(ArenaState(viewersAndPlayers.path, viewersAndPlayers.name, viewersAndPlayers.emojiCode, viewersAndPlayers.viewers, viewersAndPlayers.players, arenaState.playerStates))
-      }
-      else {
-        // if the players changes, reinit the playersState
-        Option.empty
-      }
-    } getOrElse {
-      ArenaState(viewersAndPlayers.path, viewersAndPlayers.name, viewersAndPlayers.emojiCode, viewersAndPlayers.viewers, viewersAndPlayers.players, Map.empty[Player.Service, PlayerState])
-    }
-
+  def performArenaUpdate(arenaState: ArenaState)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
     updateArena(arenaState)(playerMoveWs).map(Some(_))
   }
 
 }
-
-
 
 object Player {
   type Service = String
@@ -482,8 +492,8 @@ object Direction {
 }
 
 object PlayerState {
-  import play.api.libs.json._
   import play.api.libs.functional.syntax._
+  import play.api.libs.json._
 
   implicit val jsonWrites: Writes[PlayerState] = (
       (__ \ "x").write[Int] ~

@@ -17,9 +17,9 @@
 package models
 
 import java.net.URL
-import java.util.UUID
+import java.time.ZonedDateTime
 
-import models.Arena.ArenaState
+import models.Arena.{ArenaConfigAndPlayers, ArenaState}
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import play.api.test.Helpers._
 
@@ -36,7 +36,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
       val player = Player("http://foo", "foo", new URL("http://foo"))
       val playerState = PlayerState(0, 0, Direction.S, true, 0)
-      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player), Map(player.service -> playerState))
+      val initState = ArenaState(ArenaConfigAndPlayers("test", "test", "test", Set(player)), Map(player.service -> playerState), ZonedDateTime.now())
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -52,7 +52,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState.playerStates(player.service).y must equal (1)
+      newState.state(player.service).y must equal (1)
     }
 
     "be accurate" in {
@@ -61,7 +61,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
       val player1State = PlayerState(0, 0, Direction.S, true, 0)
       val player2State = PlayerState(0, 1, Direction.N, false, 0)
 
-      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2), Map(player1.service -> player1State, player2.service -> player2State))
+      val initState = ArenaState(ArenaConfigAndPlayers("test", "test", "test",  Set(player1, player2)), Map(player1.service -> player1State, player2.service -> player2State), ZonedDateTime.now())
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -77,8 +77,8 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState.playerStates(player1.service).wasHit must equal (false)
-      newState.playerStates(player2.service).wasHit must equal (true)
+      newState.state(player1.service).wasHit must equal (false)
+      newState.state(player2.service).wasHit must equal (true)
     }
   }
 
@@ -89,7 +89,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
       val player1State = PlayerState(0, 0, Direction.S, false, 0)
       val player2State = PlayerState(0, 1, Direction.N, false, 0)
 
-      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2), Map(player1.service -> player1State, player2.service -> player2State))
+      val initState = ArenaState(ArenaConfigAndPlayers("test", "test", "test",  Set(player1, player2)), Map(player1.service -> player1State, player2.service -> player2State), ZonedDateTime.now())
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -107,10 +107,10 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState.playerStates(player1.service).score must equal (1)
-      newState.playerStates(player1.service).wasHit must equal (false)
-      newState.playerStates(player2.service).score must equal (-1)
-      newState.playerStates(player2.service).wasHit must equal (true)
+      newState.state(player1.service).score must equal (1)
+      newState.state(player1.service).wasHit must equal (false)
+      newState.state(player2.service).score must equal (-1)
+      newState.state(player2.service).wasHit must equal (true)
     }
   }
 
@@ -125,7 +125,7 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
       val playerStates = Map(player1.service -> player1State, player2.service -> player2State, player3.service -> player3State)
 
-      val initState = ArenaState("test", "test", "test", Set.empty[UUID], Set(player1, player2, player3), playerStates)
+      val initState = ArenaState(ArenaConfigAndPlayers("test", "test", "test",  Set(player1, player2, player3)), playerStates, ZonedDateTime.now())
 
       // if wasHit was true, then move forward, otherwise do nothing
       val newState = await {
@@ -141,9 +141,9 @@ class DataSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
         }
       }
 
-      newState.playerStates(player1.service).wasHit must equal (false)
-      newState.playerStates(player2.service).wasHit must equal (true)
-      newState.playerStates(player3.service).wasHit must equal (false)
+      newState.state(player1.service).wasHit must equal (false)
+      newState.state(player2.service).wasHit must equal (true)
+      newState.state(player3.service).wasHit must equal (false)
     }
   }
 

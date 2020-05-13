@@ -31,6 +31,17 @@ spec:
   partitions: 10
   replicas: 2
 ---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: scores-reset
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: cloudbowl
+spec:
+  partitions: 10
+  replicas: 2
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

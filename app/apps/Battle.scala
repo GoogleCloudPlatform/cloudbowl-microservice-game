@@ -18,15 +18,16 @@ package apps
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Source}
+import akka.stream.scaladsl.{MergeHub, Source}
 import models.Arena
-import models.Arena.{ArenaConfigAndPlayers, ArenaState, MaybeViewersAndMaybePlayers, ViewersAndPlayers}
+import models.Arena.{ArenaState, KafkaConfig, Pathed, PathedPlayersRefresh, PathedScoresReset}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.libs.ws.ahc.AhcWSClient
-import services.Topics
 
 import scala.concurrent.duration._
+
+// todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
 
 object Battle extends App {
 
@@ -38,54 +39,46 @@ object Battle extends App {
 
   val groupId = "battle"
 
-  lazy val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
+  val arenaUpdateSink = KafkaConfig.SinksAndSources.arenaUpdateSink
 
-  lazy val arenaUpdateSink = Arena.KafkaSinksAndSources.arenaUpdateSink
+  val viewerEventsSource = KafkaConfig.SinksAndSources.viewerPingSource(groupId).map(_.key())
 
-  lazy val playersRefreshSource: Source[ArenaConfigAndPlayers, _] = {
-    Arena.KafkaSinksAndSources.playersRefreshSource(groupId).mapAsync(Int.MaxValue) { record =>
-      Arena.playerService.fetch(record.key())
-    }
+  val playersRefreshSource = KafkaConfig.SinksAndSources.playersRefreshSource(groupId).map { record =>
+    PathedPlayersRefresh(record.key())
   }
 
-  val tick = Source.repeat(NotUsed).throttle(1, 15.seconds).map(Right(_))
-
-  // todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
-  val viewersSource = viewerEventsSource
-    .groupBy(Int.MaxValue, _.key())
-    .map(Left(_))
-    .merge(tick)
-    .statefulMapConcat(Arena.viewersUpdate)
-    .mergeSubstreams
-
-  // Emits with the initial state of viewers & players, and then emits whenever the viewers or players change
-  val viewersAndPlayersSource = viewersSource
-    .map(Left(_))
-    .merge(playersRefreshSource.map(Right(_)))
-    .groupBy(Int.MaxValue, Arena.arenaPathFromViewerOrPlayers)
-    .scanAsync(Option.empty[MaybeViewersAndMaybePlayers])(Arena.updatePlayers)
-    .mapConcat(Arena.onlyArenasWithViewersAndPlayers)
-  //.mergeSubstreams
-
-  // todo: currently no persistence of ArenaState so it is lost on restart
-  val arenaUpdateFlow = Flow[ViewersAndPlayers]
-    .zipLatest(Source.repeat(NotUsed).throttle(1, 1.second))
-    .filter(_._1.viewers.nonEmpty) // only arenas with viewers
-    .filter(_._1.players.nonEmpty) // only arenas with players
-    .scanAsync(Option.empty[ArenaState])(Arena.performArenaUpdate)
-    .mapConcat(_.toList)
-    .map(Arena.arenaStateToArenaUpdate)
+  val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId).map { record =>
+    PathedScoresReset(record.key())
+  }
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
-    new ProducerRecord(Topics.arenaUpdate, arenaUpdate.path, arenaUpdate.arenaDimsAndPlayers)
+    new ProducerRecord(KafkaConfig.Topics.arenaUpdate, arenaUpdate.path, arenaUpdate.arenaDimsAndPlayers)
   }
 
-  viewersAndPlayersSource
-    .log("viewersAndPlayers")
-    .via(arenaUpdateFlow)
-    .log("arenaUpdate")
+  val sink = MergeHub.source[Pathed](16)
+    .groupBy(Int.MaxValue, _.path, true)
+    .scanAsync(Option.empty[ArenaState])(Arena.processArenaEvent)
+    .mapConcat(_.toSeq)
+    .filter(_.config.players.nonEmpty)
+    .map(Arena.arenaStateToArenaUpdate)
     .map(arenaUpdateToProducerRecord)
     .to(arenaUpdateSink)
+    .run()
+
+  val arenaRefresh = viewerEventsSource
+    .groupBy(Int.MaxValue, identity)
+    .map(Left(_))
+    .merge(Source.repeat(NotUsed).throttle(1, 1.second).map(Right(_)))
+    .statefulMapConcat(Arena.hasViewers)
+    .to(sink)
+    .run()
+
+  val playersRefresh = playersRefreshSource
+    .to(sink)
+    .run()
+
+  val scoresReset = scoresResetSource
+    .to(sink)
     .run()
 
   actorSystem.registerOnTermination {

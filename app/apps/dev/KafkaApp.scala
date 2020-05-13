@@ -23,13 +23,13 @@ import java.util.{Properties, UUID}
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import com.dimafeng.testcontainers.KafkaContainer
-import models.Arena
-import models.Events.PlayersRefresh
+import models.Arena.KafkaConfig.Serialization._
+import models.Arena.KafkaConfig._
+import models.Events.{PlayersRefresh, ScoresReset}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
-import services.KafkaSerialization._
-import services.{Kafka, Topics}
+import services.Kafka
 
 import scala.concurrent.duration._
 import scala.io.StdIn
@@ -74,11 +74,11 @@ object KafkaConsumerApp extends App {
 
   val groupId = UUID.randomUUID().toString
 
-  val viewerEventsSource = Arena.KafkaSinksAndSources.viewerPingSource(groupId)
+  val viewerEventsSource = SinksAndSources.viewerPingSource(groupId)
 
-  val playersRefreshSource = Arena.KafkaSinksAndSources.playersRefreshSource(groupId)
+  val playersRefreshSource = SinksAndSources.playersRefreshSource(groupId)
 
-  val arenaUpdateSource = Arena.KafkaSinksAndSources.arenaUpdateSource(groupId)
+  val arenaUpdateSource = SinksAndSources.arenaUpdateSource(groupId)
 
   viewerEventsSource.merge(playersRefreshSource).merge(arenaUpdateSource).runForeach(println)
 }
@@ -111,6 +111,9 @@ object KafkaProducerApp extends App {
             send(Topics.viewerPing, arena, uuid)
           }
           actorSystem.scheduler.scheduleOnce(1.minute)(cancelable.cancel())
+
+        case Array(arena, "scoresreset") =>
+          send(Topics.scoresReset, arena, ScoresReset)
 
         case _ =>
           println(s"Invalid command: $line")

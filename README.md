@@ -33,6 +33,7 @@ Run Locally:
     ```
     ARENA/viewerjoin
     ARENA/playersrefresh
+    ARENA/scoresreset
     ```
 1. Start the Viewer web app
     ```

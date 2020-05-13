@@ -16,9 +16,6 @@
 
 package services
 
-import java.net.URL
-import java.util.UUID
-
 import akka.Done
 import akka.actor.ActorSystem
 import akka.kafka.scaladsl.Consumer.Control
@@ -26,12 +23,9 @@ import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.{Config, ConfigValueFactory}
-import models.Arena.Dimensions
-import models.Events.{ArenaDimsAndPlayers, PlayersRefresh}
-import models.{Arena, Direction, Player, PlayerState}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 
 import scala.concurrent.Future
 import scala.util.Try
@@ -80,47 +74,6 @@ object Kafka {
     val subscription = Subscriptions.topics(topic)
     val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
     Consumer.plainPartitionedSource(settings, subscription).flatMapMerge(Int.MaxValue, _._2)
-  }
-
-}
-
-object Topics {
-
-  val playersRefresh = "players-refresh"
-  val viewerPing = "viewer-ping"
-  val arenaUpdate = "arena-update"
-
-}
-
-object KafkaSerialization {
-
-  import upickle.default._
-
-  implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
-  implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
-  implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
-  implicit val playerReadWriter: ReadWriter[Player] = macroRW
-  implicit val dimensionsWriter: ReadWriter[Dimensions] = macroRW
-  implicit val arenaDimsAndPlayersWriter: ReadWriter[ArenaDimsAndPlayers] = macroRW
-
-
-  implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
-  implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => {
-    readBinary[PlayersRefresh.type](data)
-  }
-  implicit val arenaDimsAndPlayersDeserializer: Deserializer[ArenaDimsAndPlayers] = (_: String, data: Array[Byte]) => {
-    readBinary[ArenaDimsAndPlayers](data)
-  }
-  implicit val uuidDeserializer: Deserializer[UUID] = new UUIDDeserializer
-
-
-  implicit val uuidSerializer: Serializer[UUID] = new UUIDSerializer
-  implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
-  implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => {
-    writeBinary[ArenaDimsAndPlayers](data)
-  }
-  implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => {
-    writeBinary[PlayersRefresh.type](data)
   }
 
 }

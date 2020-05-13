@@ -2,6 +2,8 @@
 GET         /:arena                                     controllers.Main.index(arena)
 GET         /updates/:arena                             controllers.Main.updates(arena, uuid: java.util.UUID)
 
+POST        /scoresreset/:arena                         controllers.Main.scoresReset(arena)
+
 + nocsrf
 POST        /playersrefresh/:arena                      controllers.Main.playersRefresh(arena)
 + nocsrf

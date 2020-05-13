@@ -42,7 +42,7 @@ class DevPlayers extends Players {
         ArenaConfigAndPlayers(arena, "Empty", "2728", Set.empty)
       }
       else {
-        val players = Set.fill(Random.nextInt(10) + 1) {
+        val players = Set.fill(Random.nextInt(10) + 2) {
           val name = Random.alphanumeric.take(6).mkString
           val service = s"http://localhost:8080/$name"
           val img = new URL(s"https://api.adorable.io/avatars/285/$name.png")

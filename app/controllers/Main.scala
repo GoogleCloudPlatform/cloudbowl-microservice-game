@@ -30,7 +30,7 @@ import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.mvc.InjectedController
-import services.{GitHub, GoogleSheetPlayersConfig, Topics}
+import services.{GitHub, GoogleSheetPlayersConfig}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -43,8 +43,9 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   }
   // eowtf
 
-  val viewerEventSink = Arena.KafkaSinksAndSources.viewerEventSink
-  val playersRefreshSink = Arena.KafkaSinksAndSources.playersRefreshSink
+  val viewerEventSink = Arena.KafkaConfig.SinksAndSources.viewerEventSink
+  val playersRefreshSink = Arena.KafkaConfig.SinksAndSources.playersRefreshSink
+  val scoresResetSink = Arena.KafkaConfig.SinksAndSources.scoresResetSink
 
   def index(arena: Arena.Path) = Action {
     Ok(views.html.index(arena))
@@ -54,11 +55,11 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
     // todo: one global source and broadcast to all viewers
 
     val viewerPingSource = Source.repeat {
-      new ProducerRecord(Topics.viewerPing, arena, uuid)
+      new ProducerRecord(Arena.KafkaConfig.Topics.viewerPing, arena, uuid)
     }.throttle(1, 15.seconds).alsoTo(viewerEventSink)
 
     val arenaUpdates: Source[EventSource.Event, _] = {
-      val arenaUpdateSource = Arena.KafkaSinksAndSources.arenaUpdateSource(uuid.toString)
+      val arenaUpdateSource = Arena.KafkaConfig.SinksAndSources.arenaUpdateSource(uuid.toString)
       arenaUpdateSource.filter(_.key() == arena).map { message =>
         Json.toJson(message.value())
       }.via(EventSource.flow[JsValue])
@@ -74,7 +75,7 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   // this endpoint expects the webhook call from google sheets
   def playersRefresh(arena: Arena.Path) = Action.async { request =>
     if (request.headers.get(AUTHORIZATION).contains(googleSheetPlayersConfig.maybePsk.get)) {
-      val record = new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
+      val record = new ProducerRecord(Arena.KafkaConfig.Topics.playersRefresh, arena, PlayersRefresh)
       Source.single(record).runWith(playersRefreshSink).map { _ =>
         NoContent
       }
@@ -108,7 +109,7 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
       }
 
       val messages = arenas.map { arena =>
-        new ProducerRecord(Topics.playersRefresh, arena, PlayersRefresh)
+        new ProducerRecord(Arena.KafkaConfig.Topics.playersRefresh, arena, PlayersRefresh)
       }
 
       Source(messages).runWith(playersRefreshSink).map { _ =>
@@ -117,6 +118,12 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
     }
     else {
       Future.successful(Unauthorized)
+    }
+  }
+
+  def scoresReset(arena: Arena.Path) = Action.async {
+    Source.single(new ProducerRecord(Arena.KafkaConfig.Topics.scoresReset, arena, ScoresReset)).runWith(scoresResetSink).map { _ =>
+      Ok
     }
   }
 

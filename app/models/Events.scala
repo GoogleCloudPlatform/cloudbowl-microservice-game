@@ -17,23 +17,19 @@
 package models
 
 import java.net.URL
-import java.util.UUID
 
 import models.Direction.Direction
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsString, Writes, __}
 
+import scala.concurrent.duration.FiniteDuration
+
 object Events {
 
-  type ViewerPing = UUID
-
-
-  type ArenaViewers = Map[Arena.Path, Set[UUID]]
-
-
   case object PlayersRefresh
+  case object ScoresReset
 
-  case class ArenaDimsAndPlayers(name: Arena.Name, emojiCode: Arena.EmojiCode, dims: Arena.Dimensions, playerStates: Map[Player, PlayerState])
+  case class ArenaDimsAndPlayers(name: Arena.Name, emojiCode: Arena.EmojiCode, dims: Arena.Dimensions, playerStates: Map[Player, PlayerState], canResetIn: FiniteDuration)
   case class ArenaUpdate(path: Arena.Path, arenaDimsAndPlayers: ArenaDimsAndPlayers)
 
   implicit val urlWrites = Writes[URL](url => JsString(url.toString))
@@ -58,13 +54,21 @@ object Events {
     (__ \ "emoji_code").write[String] ~
     (__ \ "width").write[Int] ~
     (__ \ "height").write[Int] ~
+    (__ \ "can_reset_in_seconds").write[Long] ~
     (__ \ "players").write[Map[String, (Player, PlayerState)]]
   ) { arenaDimsAndPlayersWrites: ArenaDimsAndPlayers =>
     val playerPlayerStates = arenaDimsAndPlayersWrites.playerStates.map { case (player, playerState) =>
       (player.service, (player, playerState))
     }
 
-    (arenaDimsAndPlayersWrites.name, arenaDimsAndPlayersWrites.emojiCode, arenaDimsAndPlayersWrites.dims.width, arenaDimsAndPlayersWrites.dims.height, playerPlayerStates)
+    (
+      arenaDimsAndPlayersWrites.name,
+      arenaDimsAndPlayersWrites.emojiCode,
+      arenaDimsAndPlayersWrites.dims.width,
+      arenaDimsAndPlayersWrites.dims.height,
+      arenaDimsAndPlayersWrites.canResetIn.toSeconds,
+      playerPlayerStates,
+    )
   }
 
 }
