@@ -14,7 +14,9 @@
  * limitations under the License.
  *@
 
-@(arena: Arena.Path)
+@(arena: Arena.Path)(implicit request: RequestHeader)
+
+@import helper._
 
 <!doctype html>
 <html lang="en">
@@ -105,7 +107,12 @@
 <body data-updatesurl="@controllers.routes.Main.updates(arena, java.util.UUID.randomUUID)">
     <span id="title"></span>
     <div id="arena"></div>
-    <span id="scoreboardTitle">High Scores</span>
+    <span id="scoreboardTitle">
+        High Scores
+        @form(action = CSRF(controllers.routes.Main.scoresReset(arena)), Symbol("id") -> "scoresResetForm") {
+            <input id="scoresResetImg" type="image" src="https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f44a.png" disabled>
+        }
+    </span>
     <div id="scoreboard"></div>
     <div id="modal">
         <span id="message">Loading the microbots</span>

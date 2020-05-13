@@ -39,7 +39,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const message = document.getElementById('message');
   const arena = document.getElementById('arena');
   const scoreboard = document.getElementById('scoreboard');
+  const scoresResetImg = document.getElementById('scoresResetImg');
+  const scoresResetForm = document.getElementById('scoresResetForm');
   const maybeUpdatesUrl = body.dataset.updatesurl;
+
+  scoresResetForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const xhr = new XMLHttpRequest();
+    xhr.open('post', scoresResetForm.action);
+    xhr.send();
+  });
 
   const fixSize = () => {
     if (window.innerWidth > 600) {
@@ -80,6 +89,19 @@ document.addEventListener('DOMContentLoaded', () => {
           modal.style.visibility = 'hidden';
 
           title.textContent = data.name;
+
+          if (data.can_reset_in_seconds > 0) {
+            scoresResetImg.title = `You can reset the scores in ${data.can_reset_in_seconds} seconds`;
+            scoresResetImg.disabled = true;
+            scoresResetImg.style.opacity = '0.5';
+            scoresResetImg.style.cursor = 'not-allowed';
+          }
+          else {
+            scoresResetImg.title = `Reset Scores`;
+            scoresResetImg.disabled = false;
+            scoresResetImg.style.opacity = '1';
+            scoresResetImg.style.cursor = 'pointer';
+          }
 
           // arena setup
           if (parseInt(arena.dataset.width) !== data.width || parseInt(arena.dataset.height) !== data.height) {

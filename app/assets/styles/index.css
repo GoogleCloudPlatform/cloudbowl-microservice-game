@@ -66,6 +66,11 @@ body {
     align-self: flex-end;
 }
 
+#scoresResetImg {
+    height: 16pt;
+    padding-left: 5px;
+}
+
 #scoreboard {
     grid-area: scoreboard;
     overflow-y: auto;

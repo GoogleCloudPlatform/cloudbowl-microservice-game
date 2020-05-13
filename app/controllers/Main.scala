@@ -47,7 +47,7 @@ class Main @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, gitHub:
   val playersRefreshSink = Arena.KafkaConfig.SinksAndSources.playersRefreshSink
   val scoresResetSink = Arena.KafkaConfig.SinksAndSources.scoresResetSink
 
-  def index(arena: Arena.Path) = Action {
+  def index(arena: Arena.Path) = Action { implicit request =>
     Ok(views.html.index(arena))
   }
 
