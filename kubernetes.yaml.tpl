@@ -125,7 +125,7 @@ metadata:
 spec:
   template:
     metadata:
-      name: $COMMIT_SHA
+      name: cloudbowl-web-$COMMIT_SHA
       annotations:
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "10"
