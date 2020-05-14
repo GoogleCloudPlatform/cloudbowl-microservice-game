@@ -16,8 +16,8 @@ libraryDependencies ++= Seq(
 
   "org.webjars"            %% "webjars-play"                    % "2.8.0",
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.2",
-  "com.typesafe.akka"      %% "akka-stream-contrib"             % "0.11",
+  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.3",
+  //"com.typesafe.akka"      %% "akka-stream-contrib"             % "0.11",
   "com.lihaoyi"            %% "upickle"                         % "1.0.0",
 
   "com.pauldijou"          %% "jwt-core"                        % "4.3.0",
