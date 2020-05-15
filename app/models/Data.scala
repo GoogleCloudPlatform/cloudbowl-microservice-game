@@ -165,8 +165,16 @@ object Arena {
     {
       case Left(path) =>
         val pathedArenaRefresh = PathedArenaRefresh(path)
+        val wasEmpty = maybeState.isEmpty
         maybeState = Some((pathedArenaRefresh, ZonedDateTime.now))
-        maybeState.map(_._1).toSeq
+
+        // we don't want to send refresh events for every viewer ping, only the first one
+        if (wasEmpty) {
+          maybeState.map(_._1).toSeq
+        }
+        else {
+          Seq.empty
+        }
 
       case Right(_) =>
         maybeState.flatMap { case (pathedArenaRefresh, lastPing) =>

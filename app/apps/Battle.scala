@@ -57,7 +57,6 @@ object Battle extends App {
 
   val sink = MergeHub.source[Pathed](16)
     .groupBy(Int.MaxValue, _.path, true)
-    .throttle(1, 1.second)
     .scanAsync(Option.empty[ArenaState])(Arena.processArenaEvent)
     .mapConcat(_.toSeq)
     .filter(_.config.players.nonEmpty)
