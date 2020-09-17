@@ -3,5 +3,10 @@
     "APPLICATION_SECRET": {
       "generator": "secret"
     }
+  },
+  "build": {
+    "buildpacks": {
+      "builder": "heroku/buildpacks:18"
+    }
   }
 }
