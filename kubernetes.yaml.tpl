@@ -118,7 +118,7 @@ spec:
 #              key: SHEET_PRIVATE_KEY_ID
 #              name: cloudbowl-config
 ---
-apiVersion: serving.knative.dev/v1alpha1
+apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: cloudbowl-web
