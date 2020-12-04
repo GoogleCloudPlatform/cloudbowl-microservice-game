@@ -76,22 +76,25 @@ For Google Sheets Player backend:
     gcloud config set core/project YOUR_PROJECT
     gcloud config set compute/region us-central1
     gcloud config set container/cluster cloudbowl
+
+    gcloud services enable container.googleapis.com containerregistry.googleapis.com cloudbuild.googleapis.com
+
     gcloud container clusters create \
       --region=$(gcloud config get-value compute/region) \
       --addons=HorizontalPodAutoscaling,HttpLoadBalancing,CloudRun \
       --machine-type=n1-standard-4 \
       --enable-stackdriver-kubernetes \
       --enable-ip-alias \
-      --enable-autoscaling --num-nodes=3 --min-nodes=0 --max-nodes=20 \
-      --enable-autorepair \
-      --cluster-version=1.15 \
+      --enable-autoscaling --num-nodes=1 --min-nodes=0 --max-nodes=20 \
+      --release-channel=stable \
       --scopes cloud-platform \
       $(gcloud config get-value container/cluster)
     ```
+
 1. Install Strimzi Kafka Operator
     ```
     kubectl create namespace kafka
-    curl -L https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.17.0/strimzi-cluster-operator-0.17.0.yaml \
+    curl -L https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.20.0/strimzi-cluster-operator-0.20.0.yaml \
       | sed 's/namespace: .*/namespace: kafka/' \
       | kubectl apply -f - -n kafka
     ```
@@ -130,7 +133,7 @@ For Google Sheets Player backend:
     ```
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
     echo "IP_ADDRESS=$IP_ADDRESS"
-   
+
     gcloud beta run domain-mappings create --service cloudbowl-web --domain $IP_ADDRESS.nip.io --platform=gke --project=$(gcloud config get-value core/project) \
       --cluster=$(gcloud config get-value container/cluster) --cluster-location=$(gcloud config get-value compute/region)
     gcloud compute addresses create cloudbowl-ip --addresses=$IP_ADDRESS --region=$(gcloud config get-value compute/region)

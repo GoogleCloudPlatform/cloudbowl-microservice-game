@@ -23,6 +23,7 @@ import models.Arena
 import models.Arena.{ArenaState, KafkaConfig, Pathed, PathedPlayersRefresh, PathedScoresReset}
 import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
 import org.apache.kafka.clients.producer.ProducerRecord
+import play.api.Environment
 import play.api.libs.ws.ahc.AhcWSClient
 
 import scala.concurrent.duration._
@@ -36,6 +37,8 @@ object Battle extends App {
   implicit val ec = actorSystem.dispatcher
 
   implicit val wsClient = AhcWSClient()
+
+  implicit val config = play.api.Configuration.load(Environment.simple())
 
   val groupId = "battle"
 

@@ -5,7 +5,7 @@ enablePlugins(PlayScala, AutomateHeaderPlugin)
 
 name := "cloudbowl"
 
-scalaVersion := "2.13.2"
+scalaVersion := "2.13.4"
 
 resolvers += Resolver.mavenLocal
 
@@ -16,7 +16,7 @@ libraryDependencies ++= Seq(
 
   "org.webjars"            %% "webjars-play"                    % "2.8.0",
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.3",
+  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.5",
   //"com.typesafe.akka"      %% "akka-stream-contrib"             % "0.11",
   "com.lihaoyi"            %% "upickle"                         % "1.0.0",
 
@@ -41,7 +41,6 @@ scalacOptions ++= Seq(
   "-Xlint:doc-detached",
   "-Xlint:inaccessible",
   "-Xlint:infer-any",
-  "-Xlint:nullary-override",
   "-Xlint:nullary-unit",
   "-Xlint:option-implicit",
   "-Xlint:package-object-classes",

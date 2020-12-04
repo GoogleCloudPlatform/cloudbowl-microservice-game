@@ -34,7 +34,9 @@ trait Players {
   def fetch(arena: Arena.Path): Future[ArenaConfigAndPlayers]
 }
 
-class DevPlayers extends Players {
+class DevPlayers(config: Configuration) extends Players {
+
+  val avatarBaseUrl = config.get[String]("avatar.base.url")
 
   def fetch(arena: Arena.Path): Future[ArenaConfigAndPlayers] = {
     Future.successful {
@@ -45,7 +47,7 @@ class DevPlayers extends Players {
         val players = Set.fill(Random.nextInt(10) + 2) {
           val name = Random.alphanumeric.take(6).mkString
           val service = s"http://localhost:8080/$name"
-          val img = new URL(s"https://api.adorable.io/avatars/285/$name.png")
+          val img = new URL(s"$avatarBaseUrl/avatars/285/$name.png")
           Player(service, name, img)
         }
 
@@ -70,7 +72,7 @@ class GoogleSheetPlayersConfig @Inject()(configuration: Configuration) {
 }
 
 // todo: name & emoji code
-class GoogleSheetPlayers @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersConfig, wsClient: WSClient)(implicit ec: ExecutionContext) extends Players {
+class GoogleSheetPlayers(googleSheetPlayersConfig: GoogleSheetPlayersConfig, wsClient: WSClient)(implicit ec: ExecutionContext) extends Players {
 
   import java.time.Clock
 
@@ -113,7 +115,9 @@ class GoogleSheetPlayers @Inject()(googleSheetPlayersConfig: GoogleSheetPlayersC
 }
 
 
-class GitHubPlayers @Inject()(gitHub: GitHub, wsClient: WSClient)(implicit ec: ExecutionContext) extends Players {
+class GitHubPlayers(gitHub: GitHub, config: Configuration)(implicit ec: ExecutionContext) extends Players {
+
+  val avatarBaseUrl = config.get[String]("avatar.base.url")
 
   override def fetch(arena: Path): Future[ArenaConfigAndPlayers] = {
     gitHub.ok[JsValue](s"repos/${gitHub.maybeOrgRepo.get}/contents/$arena.json").flatMap { body =>
@@ -134,7 +138,7 @@ class GitHubPlayers @Inject()(gitHub: GitHub, wsClient: WSClient)(implicit ec: E
               maybeGitHubUser.map { gitHubUser =>
                 s"https://github.com/$gitHubUser.png?size=285"
               }.getOrElse {
-                s"https://api.adorable.io/avatars/285/$name.png"
+                s"$avatarBaseUrl/avatars/285/$name.png"
               }
             )
 

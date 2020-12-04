@@ -50,9 +50,10 @@ class PlayersSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
 
   "github" must {
     "work" in {
-      val config = new GitHub(Configuration(actorSystem.settings.config), wsClient)
-      if (config.isConfigured) {
-        val gitHubPlayers = new GitHubPlayers(config, wsClient)
+      val config = Configuration(actorSystem.settings.config)
+      val gitHub = new GitHub(config, wsClient)
+      if (gitHub.isConfigured) {
+        val gitHubPlayers = new GitHubPlayers(gitHub, config)
         val arenaConfigAndPlayers = await(gitHubPlayers.fetch("test"))
         arenaConfigAndPlayers.players must not be empty
       }

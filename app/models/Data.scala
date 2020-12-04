@@ -190,19 +190,19 @@ object Arena {
   }
 
   // todo: better
-  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Players = {
+  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, configuration: Configuration): Players = {
     val googleSheetPlayersConfig = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
     val gitHub = new GitHub(Configuration(actorSystem.settings.config), wsClient)
     if (googleSheetPlayersConfig.isConfigured)
       new GoogleSheetPlayers(googleSheetPlayersConfig, wsClient)
     else if (gitHub.isConfigured)
-      new GitHubPlayers(gitHub, wsClient)
+      new GitHubPlayers(gitHub, configuration)
     else
-      new DevPlayers
+      new DevPlayers(configuration)
   }
 
   def processArenaEvent(state: Option[ArenaState], pathed: Pathed)
-                       (implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient): Future[Option[ArenaState]] = {
+                       (implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, configuration: Configuration): Future[Option[ArenaState]] = {
 
     def freshArenaState(config: ArenaConfigAndPlayers): ArenaState = {
       ArenaState(config, Map.empty[Player.Service, PlayerState], ZonedDateTime.now())

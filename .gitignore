@@ -18,3 +18,4 @@ dist
 /id_rsa.pub
 /conf/generated.keystore
 /kubernetes.yaml
+/.bsp/
