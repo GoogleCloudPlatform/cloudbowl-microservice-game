@@ -47,7 +47,7 @@ class DevPlayers(config: Configuration) extends Players {
         val players = Set.fill(Random.nextInt(10) + 2) {
           val name = Random.alphanumeric.take(6).mkString
           val service = s"http://localhost:8080/$name"
-          val img = new URL(s"$avatarBaseUrl/avatars/285/$name.png")
+          val img = new URL(s"$avatarBaseUrl/285/$name.png")
           Player(service, name, img)
         }
 
@@ -138,7 +138,7 @@ class GitHubPlayers(gitHub: GitHub, config: Configuration)(implicit ec: Executio
               maybeGitHubUser.map { gitHubUser =>
                 s"https://github.com/$gitHubUser.png?size=285"
               }.getOrElse {
-                s"$avatarBaseUrl/avatars/285/$name.png"
+                s"$avatarBaseUrl/285/$name.png"
               }
             )
 
