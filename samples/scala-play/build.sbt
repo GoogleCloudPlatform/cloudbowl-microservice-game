@@ -1,4 +1,4 @@
-enablePlugins(JavaAppPackaging)
+enablePlugins(LauncherJarPlugin)
 
 name := "cloudpit-scala-play"
 
@@ -6,12 +6,12 @@ scalaSource in Compile := baseDirectory.value / "app"
 
 resourceDirectory in Compile := baseDirectory.value / "app"
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.13.4"
 
 resolvers += Resolver.mavenLocal
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.0",
+  "com.typesafe.play" %% "play-akka-http-server" % "2.8.7",
   "org.slf4j" % "slf4j-simple" % "1.7.21"
 )
 
@@ -28,7 +28,6 @@ scalacOptions ++= Seq(
   "-Xlint:doc-detached",
   "-Xlint:inaccessible",
   "-Xlint:infer-any",
-  "-Xlint:nullary-override",
   "-Xlint:nullary-unit",
   "-Xlint:option-implicit",
   "-Xlint:package-object-classes",
@@ -47,3 +46,7 @@ scalacOptions ++= Seq(
 )
 
 Global / cancelable := false
+
+publishArtifact in (Compile, packageDoc) := false
+
+sources in (Compile,doc) := Seq.empty
