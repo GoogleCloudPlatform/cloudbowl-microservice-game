@@ -10,4 +10,4 @@ app.post('/', function (req, res) {
   res.send(moves[Math.floor(Math.random() * moves.length)]);
 });
 
-app.listen(process.env.PORT || 3000);
+app.listen(process.env.PORT || 8080);

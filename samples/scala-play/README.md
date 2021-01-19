@@ -1,7 +1,7 @@
 Cloud Bowl Sample - Scala Play
 ------------------------------
 
-To make changes, edit the `src/ServerApp.scala` file.
+To make changes, edit the `app/ServerApp.scala` file.
 
 Run Locally (Dev):
 ```
