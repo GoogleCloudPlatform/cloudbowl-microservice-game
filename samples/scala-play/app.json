@@ -1,4 +1,5 @@
 {
+  "name": "cloudbowl-samples-scala-play",
   "env": {
     "APPLICATION_SECRET": {
       "generator": "secret"
