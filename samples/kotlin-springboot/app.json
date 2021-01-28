@@ -1,3 +1,6 @@
 {
-    "name": "cloudbowl-samples-kotlin-springboot"
+    "name": "cloudbowl-samples-kotlin-springboot",
+    "options": {
+        "http2": true
+    }
 }
