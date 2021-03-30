@@ -5,25 +5,22 @@ enablePlugins(PlayScala, AutomateHeaderPlugin)
 
 name := "cloudbowl"
 
-scalaVersion := "2.13.4"
-
-resolvers += Resolver.mavenLocal
+scalaVersion := "2.13.5"
 
 libraryDependencies ++= Seq(
-  guice,
-  ws,
-  filters,
+  guice                                                                    ,
+  ws                                                                       ,
+  filters                                                                  ,
 
-  "org.webjars"            %% "webjars-play"                    % "2.8.0",
+  "org.webjars"            %% "webjars-play"               % "2.8.0"       ,
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"               % "2.0.5",
-  //"com.typesafe.akka"      %% "akka-stream-contrib"             % "0.11",
-  "com.lihaoyi"            %% "upickle"                         % "1.0.0",
+  "com.typesafe.akka"      %% "akka-stream-kafka"          % "2.0.7"       ,
+  "com.lihaoyi"            %% "upickle"                    % "1.3.6"       ,
 
-  "com.pauldijou"          %% "jwt-core"                        % "4.3.0",
+  "com.pauldijou"          %% "jwt-core"                   % "5.0.0"       ,
 
-  "com.dimafeng"           %% "testcontainers-scala-kafka"      % "0.36.1",
-  "org.scalatestplus.play" %% "scalatestplus-play"              % "5.0.0" % "test"
+  "com.dimafeng"           %% "testcontainers-scala-kafka" % "0.39.3"      ,
+  "org.scalatestplus.play" %% "scalatestplus-play"         % "5.1.0" % Test,
 )
 
 scalacOptions ++= Seq(

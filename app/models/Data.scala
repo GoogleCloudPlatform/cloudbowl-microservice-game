@@ -16,27 +16,26 @@
 
 package models
 
+import akka.Done
+import akka.actor.ActorSystem
+import akka.kafka.scaladsl.Consumer.Control
+import akka.stream.scaladsl.{Sink, Source}
+import models.Direction.Direction
+import models.Events.{ArenaUpdate, PlayerJoin, PlayerLeave, PlayerUpdate, ScoresReset}
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization._
+import play.api.Logger
+import play.api.http.Status
+import play.api.libs.json.{JsObject, JsString, Json, Writes}
+import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
+import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
+import services.Kafka
+
 import java.net.URL
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
-import akka.actor.ActorSystem
-import akka.kafka.scaladsl.Consumer.Control
-import akka.stream.scaladsl.{Sink, Source}
-import akka.{Done, NotUsed}
-import models.Direction.Direction
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate, PlayersRefresh, ScoresReset}
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.serialization.{Deserializer, Serializer, StringDeserializer, StringSerializer, UUIDDeserializer, UUIDSerializer}
-import play.api.http.Status
-import play.api.libs.json.{JsString, Json, Writes}
-import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
-import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
-import play.api.{Configuration, Logger}
-import services.{DevPlayers, GitHub, GitHubPlayers, GoogleSheetPlayers, GoogleSheetPlayersConfig, Kafka, Players}
-
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.DurationConverters._
@@ -49,12 +48,13 @@ case class PlayerState(x: Int, y: Int, direction: Direction.Direction, wasHit: B
 
 object Arena {
 
-  val logger = Logger("Arena").logger
+  private val logger = Logger("Arena").logger
 
   object KafkaConfig {
 
     object Topics {
-      val playersRefresh = "players-refresh"
+      val playerUpdate = "player-update"
+      val arenaConfig = "arena-config"
       val viewerPing = "viewer-ping"
       val arenaUpdate = "arena-update"
       val scoresReset = "scores-reset"
@@ -65,25 +65,36 @@ object Arena {
       import upickle.default._
 
       implicit val urlReadWriter: ReadWriter[URL] = readwriter[String].bimap(_.toString, new URL(_)) // todo: read can fail
+      implicit val zonedDateTimeReadWriter: ReadWriter[ZonedDateTime] = readwriter[String].bimap(_.toString, ZonedDateTime.parse(_))
       implicit val directionReadWriter: ReadWriter[Direction.Direction] = macroRW
       implicit val playerStateReadWriter: ReadWriter[PlayerState] = macroRW
       implicit val playerReadWriter: ReadWriter[Player] = macroRW
-      implicit val dimensionsWriter: ReadWriter[Dimensions] = macroRW
-      implicit val arenaDimsAndPlayersWriter: ReadWriter[ArenaDimsAndPlayers] = macroRW
+      implicit val playerJoinReadWriter: ReadWriter[PlayerJoin] = macroRW
+      implicit val playerLeaveReadWriter: ReadWriter[PlayerLeave] = macroRW
+      implicit val playerUpdateReadWriter: ReadWriter[PlayerUpdate] = macroRW
+      implicit val arenaConfigReadWriter: ReadWriter[ArenaConfig] = macroRW
+      implicit val dimensionsReadWriter: ReadWriter[Dimensions] = macroRW
+      implicit val arenaStateReadWriter: ReadWriter[ArenaState] = macroRW
+      implicit val arenaUpdateReadWriter: ReadWriter[ArenaUpdate] = macroRW
 
 
       implicit val arenaPathDeserializer: Deserializer[Arena.Path] = new StringDeserializer
-      implicit val playersRefreshDeserializer: Deserializer[PlayersRefresh.type] = (_: String, data: Array[Byte]) => readBinary[PlayersRefresh.type](data)
-      implicit val arenaDimsAndPlayersDeserializer: Deserializer[ArenaDimsAndPlayers] = (_: String, data: Array[Byte]) => readBinary[ArenaDimsAndPlayers](data)
+      implicit val playerJoinDeserializer: Deserializer[PlayerJoin] = (_: String, data: Array[Byte]) => readBinary[PlayerJoin](data)
+      implicit val playerLeaveDeserializer: Deserializer[PlayerLeave] = (_: String, data: Array[Byte]) => readBinary[PlayerLeave](data)
+      implicit val playerUpdateDeserializer: Deserializer[PlayerUpdate] = (_: String, data: Array[Byte]) => readBinary[PlayerUpdate](data)
+      implicit val arenaConfigDeserializer: Deserializer[ArenaConfig] = (_: String, data: Array[Byte]) => readBinary[ArenaConfig](data)
+      implicit val arenaUpdateDeserializer: Deserializer[ArenaUpdate] = (_: String, data: Array[Byte]) => readBinary[ArenaUpdate](data)
       implicit val uuidDeserializer: Deserializer[UUID] = new UUIDDeserializer
       implicit val scoresResetDeserializer: Deserializer[ScoresReset.type] = (_: String, data: Array[Byte]) => readBinary[ScoresReset.type](data)
 
       implicit val uuidSerializer: Serializer[UUID] = new UUIDSerializer
       implicit val arenaPathSerializer: Serializer[Arena.Path] = new StringSerializer
-      implicit val arenaDimsAndPlayersSerializer: Serializer[ArenaDimsAndPlayers] = (_: String, data: ArenaDimsAndPlayers) => writeBinary[ArenaDimsAndPlayers](data)
-      implicit val playersRefreshSerializer: Serializer[PlayersRefresh.type] = (_: String, data: PlayersRefresh.type) => writeBinary[PlayersRefresh.type](data)
+      implicit val playerJoinSerializer: Serializer[PlayerJoin] = (_: String, data: PlayerJoin) => writeBinary[PlayerJoin](data)
+      implicit val playerLeaveSerializer: Serializer[PlayerLeave] = (_: String, data: PlayerLeave) => writeBinary[PlayerLeave](data)
+      implicit val playerUpdateSerializer: Serializer[PlayerUpdate] = (_: String, data: PlayerUpdate) => writeBinary[PlayerUpdate](data)
+      implicit val arenaConfigSerializer: Serializer[ArenaConfig] = (_: String, data: ArenaConfig) => writeBinary[ArenaConfig](data)
+      implicit val arenaUpdateSerializer: Serializer[ArenaUpdate] = (_: String, data: ArenaUpdate) => writeBinary[ArenaUpdate](data)
       implicit val scoresResetSerializer: Serializer[ScoresReset.type] = (_: String, data: ScoresReset.type) => writeBinary[ScoresReset.type](data)
-
     }
 
     object SinksAndSources {
@@ -93,28 +104,37 @@ object Arena {
         Kafka.sink[Arena.Path, UUID]
       }
 
-      def playersRefreshSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, PlayersRefresh.type], Future[Done]] = {
-        Kafka.sink[Arena.Path, PlayersRefresh.type]
+      def playerUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, PlayerUpdate], Future[Done]] = {
+        Kafka.sink[Arena.Path, PlayerUpdate]
       }
 
-      def arenaUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaDimsAndPlayers], Future[Done]] = {
-        Kafka.sink[Arena.Path, ArenaDimsAndPlayers]
+      def arenaConfigSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaConfig], Future[Done]] = {
+        Kafka.sink[Arena.Path, ArenaConfig]
+      }
+
+      def arenaUpdateSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ArenaUpdate], Future[Done]] = {
+        Kafka.sink[Arena.Path, ArenaUpdate]
       }
 
       def scoresResetSink(implicit actorSystem: ActorSystem): Sink[ProducerRecord[Arena.Path, ScoresReset.type], Future[Done]] = {
         Kafka.sink[Arena.Path, ScoresReset.type]
       }
 
+
       def viewerPingSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, UUID], Control] = {
         Kafka.source[Arena.Path, UUID](groupId, Topics.viewerPing)
       }
 
-      def playersRefreshSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, PlayersRefresh.type], Control] = {
-        Kafka.source[Arena.Path, PlayersRefresh.type](groupId, Topics.playersRefresh)
+      def playerUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, PlayerUpdate], Control] = {
+        Kafka.source[Arena.Path, PlayerUpdate](groupId, Topics.playerUpdate, "earliest")
       }
 
-      def arenaUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaDimsAndPlayers], Control] = {
-        Kafka.source[Arena.Path, ArenaDimsAndPlayers](groupId, Topics.arenaUpdate)
+      def arenaConfigSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaConfig], Control] = {
+        Kafka.source[Arena.Path, ArenaConfig](groupId, Topics.arenaConfig, "earliest")
+      }
+
+      def arenaUpdateSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ArenaUpdate], Control] = {
+        Kafka.source[Arena.Path, ArenaUpdate](groupId, Topics.arenaUpdate)
       }
 
       def scoresResetSource(groupId: String)(implicit actorSystem: ActorSystem): Source[ConsumerRecord[Arena.Path, ScoresReset.type], Control] = {
@@ -141,11 +161,22 @@ object Arena {
   }
 
   case class PathedArenaRefresh(path: Path) extends Pathed
-  case class PathedPlayersRefresh(path: Path) extends Pathed
   case class PathedScoresReset(path: Path) extends Pathed
+  case class PathedPlayers(path: Path, players: Set[Player]) extends Pathed
 
-  case class ArenaConfigAndPlayers(path: Path, name: Name, emojiCode: EmojiCode, players: Set[Player])
-  case class ArenaState(config: ArenaConfigAndPlayers, state: Map[Player.Service, PlayerState], startTime: ZonedDateTime)
+  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode)
+  case class ArenaState(config: ArenaConfig, state: Map[Player, PlayerState], startTime: ZonedDateTime) {
+    val dims: Dimensions = calcDimensions(state.keys.size)
+
+    lazy val json: JsObject = Json.obj(
+      "dims" -> Array(dims.width, dims.height),
+      "state" -> Json.toJson(
+        state.map { case (player, state) =>
+          player.service -> state
+        }
+      )
+    )
+  }
 
   case class ResponseWithDuration(response: StandaloneWSResponse, duration: FiniteDuration) extends StandaloneAhcWSResponse(response.underlying[play.shaded.ahc.org.asynchttpclient.Response])
 
@@ -159,68 +190,21 @@ object Arena {
     Dimensions(width, height.toInt)
   }
 
-  def hasViewers(): Either[Path, NotUsed] => scala.collection.immutable.Iterable[PathedArenaRefresh] = {
-    var maybeState = Option.empty[(PathedArenaRefresh, ZonedDateTime)]
-
-    {
-      case Left(path) =>
-        val pathedArenaRefresh = PathedArenaRefresh(path)
-        val wasEmpty = maybeState.isEmpty
-        maybeState = Some((pathedArenaRefresh, ZonedDateTime.now))
-
-        // we don't want to send refresh events for every viewer ping, only the first one
-        if (wasEmpty) {
-          maybeState.map(_._1).toSeq
-        }
-        else {
-          Seq.empty
-        }
-
-      case Right(_) =>
-        maybeState.flatMap { case (pathedArenaRefresh, lastPing) =>
-          val sinceLastPing = java.time.Duration.between(lastPing, ZonedDateTime.now()).toScala
-          if (sinceLastPing.gt(30.seconds)) {
-            None
-          }
-          else {
-            Some(pathedArenaRefresh)
-          }
-        }.toSeq
-    }
-  }
-
-  // todo: better
-  def playerService(implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, configuration: Configuration): Players = {
-    val googleSheetPlayersConfig = new GoogleSheetPlayersConfig(Configuration(actorSystem.settings.config))
-    val gitHub = new GitHub(Configuration(actorSystem.settings.config), wsClient)
-    if (googleSheetPlayersConfig.isConfigured)
-      new GoogleSheetPlayers(googleSheetPlayersConfig, wsClient)
-    else if (gitHub.isConfigured)
-      new GitHubPlayers(gitHub, configuration)
-    else
-      new DevPlayers(configuration)
-  }
-
   def processArenaEvent(state: Option[ArenaState], pathed: Pathed)
-                       (implicit ec: ExecutionContext, actorSystem: ActorSystem, wsClient: WSClient, configuration: Configuration): Future[Option[ArenaState]] = {
+                       (implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
 
-    def freshArenaState(config: ArenaConfigAndPlayers): ArenaState = {
-      ArenaState(config, Map.empty[Player.Service, PlayerState], ZonedDateTime.now())
-    }
-
-    def initArena(path: Path): Future[Option[ArenaState]] = {
-      Arena.playerService.fetch(path).flatMap { config =>
-        performArenaUpdate(freshArenaState(config))
-      }
+    def freshArenaState(config: ArenaConfig): ArenaState = {
+      ArenaState(config, Map.empty[Player, PlayerState], ZonedDateTime.now())
     }
 
     pathed match {
-      case PathedPlayersRefresh(path) =>
-        initArena(path)
+      case PathedPlayers(_, players) =>
+        println(players)
+        Future.successful(state)
 
-      case PathedArenaRefresh(path) =>
-        // if we need to refresh the arena but don't have the players yet, then do it
-        state.fold(initArena(path))(performArenaUpdate)
+      case PathedArenaRefresh(_) =>
+        // performArenaUpdate
+        Future.successful(state)
 
       case PathedScoresReset(_) =>
         state.fold(Future.successful(Option.empty[ArenaState])) { arenaState =>
@@ -256,21 +240,14 @@ object Arena {
   //   }
   // }
   //
-  def playerMoveWs(arena: Map[Player.Service, PlayerState], player: Player)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[(Move, FiniteDuration)]] = {
-    import PlayerState.jsonWrites
-
-    val dims = calcDimensions(arena.keys.size)
-
+  def playerMoveWs(arenaState: ArenaState, player: Player)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[(Move, FiniteDuration)]] = {
     val json = Json.obj(
       "_links" -> Json.obj(
         "self" -> Json.obj(
           "href" -> player.service
         )
       ),
-      "arena" -> Json.obj(
-        "dims" -> Array(dims.width, dims.height),
-        "state" -> Json.toJson(arena)
-      )
+      "arena" -> arenaState.json
     )
 
     // todo: it'd be nice to not reinit this every time
@@ -302,21 +279,19 @@ object Arena {
     }
   }
 
-  def addPlayerToArena(arena: Map[Player.Service, PlayerState], players: Set[Player], player: Player.Service): Map[Player.Service, PlayerState] = {
-    val dimensions = calcDimensions(players.size)
-
+  def addPlayerToArena(arenaState: ArenaState, player: Player): ArenaState = {
     val board = for {
-      x <- 0 until dimensions.width
-      y <- 0 until dimensions.height
+      x <- 0 until arenaState.dims.width
+      y <- 0 until arenaState.dims.height
     } yield x -> y
 
-    val taken = arena.values.map(player => player.x -> player.y)
+    val taken = arenaState.state.values.map(player => player.x -> player.y)
 
     val open = board.diff(taken.toSeq)
 
     val spot = Random.shuffle(open).head
 
-    arena.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0, Set.empty))
+    ArenaState(arenaState.config, arenaState.state.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0, Set.empty)), ZonedDateTime.now())
   }
 
   def forward(playerState: PlayerState, num: Int): Position = {
@@ -328,28 +303,26 @@ object Arena {
     }
   }
 
-  def isPlayerInPosition(position: Position)(player: (Player.Service, PlayerState)): Boolean = {
+  def isPlayerInPosition(position: Position)(player: (Player, PlayerState)): Boolean = {
     player._2.x == position.x && player._2.y == position.y
   }
 
-  def movePlayerForward(arena: Map[Player.Service, PlayerState], player: Player.Service, playerState: PlayerState): Map[Player.Service, PlayerState] = {
-    val dimensions = calcDimensions(arena.keys.size)
-
+  def movePlayerForward(arenaState: ArenaState, player: Player, playerState: PlayerState): ArenaState = {
     val newTentativePosition = forward(playerState, 1)
 
-    val isOtherPlayerInPosition = arena.exists(isPlayerInPosition(newTentativePosition))
+    val isOtherPlayerInPosition = arenaState.state.exists(isPlayerInPosition(newTentativePosition))
 
-    val isOutOfBounds = newTentativePosition.x < 0 || newTentativePosition.x > dimensions.width - 1 ||
-      newTentativePosition.y < 0 || newTentativePosition.y > dimensions.height - 1
+    val isOutOfBounds = newTentativePosition.x < 0 || newTentativePosition.x > arenaState.dims.width - 1 ||
+      newTentativePosition.y < 0 || newTentativePosition.y > arenaState.dims.height - 1
 
     if (isOtherPlayerInPosition || isOutOfBounds)
-      arena
+      arenaState
     else
-      arena.updated(player, playerState.copy(x = newTentativePosition.x, y = newTentativePosition.y))
+      ArenaState(arenaState.config, arenaState.state.updated(player, playerState.copy(x = newTentativePosition.x, y = newTentativePosition.y)), arenaState.startTime)
   }
 
-  def playerThrow(arena: Map[Player.Service, PlayerState], player: Player.Service, playerState: PlayerState): Map[Player.Service, PlayerState] = {
-    (1 to throwDistance).foldLeft(arena -> false) { case ((current, hit), distance) =>
+  def playerThrow(arenaState: ArenaState, player: Player, playerState: PlayerState): ArenaState = {
+    val updatedArena = (1 to throwDistance).foldLeft(arenaState.state -> false) { case ((current, hit), distance) =>
       if (hit) {
         current -> true
       }
@@ -357,41 +330,43 @@ object Arena {
         val target = forward(playerState, distance)
         val maybeHitPlayer = current.find(isPlayerInPosition(target))
         maybeHitPlayer.fold(current -> false) { case (hitPlayer, hitPlayerState) =>
-          if (playerState.hitBy.contains(hitPlayer)) {
+          if (playerState.hitBy.contains(hitPlayer.service)) {
             // this player can't hit a player who already hit them
             current -> true
           }
           else {
             val updatedPlayerStates = current
-              .updated(hitPlayer, hitPlayerState.copy(wasHit = true, score = hitPlayerState.score - 1, hitBy = hitPlayerState.hitBy + player))
+              .updated(hitPlayer, hitPlayerState.copy(wasHit = true, score = hitPlayerState.score - 1, hitBy = hitPlayerState.hitBy + player.service))
               .updated(player, playerState.copy(score = playerState.score + 1))
 
             updatedPlayerStates -> true
           }
         }
       }
-    }._1
+    }
+
+    ArenaState(arenaState.config, updatedArena._1, arenaState.startTime)
   }
 
-  def performMoves(currentArena: Map[Player.Service, PlayerState])
-                  (moves: Map[Player.Service, (Move, FiniteDuration)]): Map[Player.Service, PlayerState] = {
+  def performMoves(arenaState: ArenaState)
+                  (moves: Map[Player, (Move, FiniteDuration)]): ArenaState = {
 
     val movesByShortest = moves.toSeq.sortBy(_._2._2)
 
-    val arenaWithResetHits = currentArena.view.mapValues(_.copy(wasHit = false, hitBy = Set.empty, responseTime = None)).toMap
+    val arenaWithResetHits = ArenaState(arenaState.config, arenaState.state.view.mapValues(_.copy(wasHit = false, hitBy = Set.empty, responseTime = None)).toMap, arenaState.startTime)
 
     movesByShortest.foldLeft(arenaWithResetHits) { case (arena, (player, (move, responseTime))) =>
-      arena.get(player).fold(arena) { currentPlayerState =>
+      arena.state.get(player).fold(arena) { currentPlayerState =>
         val currentPlayerStateUpdatedWithResponseTime = currentPlayerState.copy(responseTime = Some(responseTime))
-        val arenaWithUpdatedResponseTime = arena.updated(player, currentPlayerStateUpdatedWithResponseTime)
+        val arenaWithUpdatedResponseTime = ArenaState(arenaState.config, arena.state.updated(player, currentPlayerStateUpdatedWithResponseTime), arenaState.startTime)
 
         move match {
           case TurnLeft =>
             val newPlayerState = currentPlayerStateUpdatedWithResponseTime.copy(direction = Direction.left(currentPlayerStateUpdatedWithResponseTime.direction))
-            arenaWithUpdatedResponseTime.updated(player, newPlayerState)
+            ArenaState(arenaState.config, arenaWithUpdatedResponseTime.state.updated(player, newPlayerState), arenaState.startTime)
           case TurnRight =>
             val newPlayerState = currentPlayerStateUpdatedWithResponseTime.copy(direction = Direction.right(currentPlayerStateUpdatedWithResponseTime.direction))
-            arenaWithUpdatedResponseTime.updated(player, newPlayerState)
+            ArenaState(arenaState.config, arenaWithUpdatedResponseTime.state.updated(player, newPlayerState), arenaState.startTime)
           case Forward =>
             movePlayerForward(arenaWithUpdatedResponseTime, player, currentPlayerStateUpdatedWithResponseTime)
           case Throw =>
@@ -402,31 +377,11 @@ object Arena {
   }
 
   def updateArena(current: ArenaState)
-                 (playerMove: (Map[Player.Service, PlayerState], Player) => Future[Option[(Move, FiniteDuration)]])
+                 (playerMove: (ArenaState, Player) => Future[Option[(Move, FiniteDuration)]])
                  (implicit ec: ExecutionContext): Future[ArenaState] = {
 
-    val stateWithGonePlayersRemoved = current.state.view.filterKeys(current.config.players.map(_.service).contains)
-
-    val readyArena = current.config.players.foldLeft(stateWithGonePlayersRemoved.toMap) { case (currentState, player) =>
-      currentState.get(player.service).fold {
-        addPlayerToArena(currentState, current.config.players, player.service)
-      } { playerState =>
-        currentState.updated(player.service, playerState)
-      }
-    }
-
-    // wtf
-    implicit def moveDurationOrdering[A <: (Move, FiniteDuration)]: Ordering[A] = {
-      Ordering.by((_: A)._2)
-    }
-
-    if (false) {
-      moveDurationOrdering
-    }
-    // wtf
-
-    val playerMovesFutures = current.config.players.map { player =>
-      playerMove(readyArena, player).map(player.service -> _)
+    val playerMovesFutures = current.state.keys.map { player =>
+      playerMove(current, player).map(player -> _)
     }
 
     val playerMovesFuture = Future.sequence(playerMovesFutures).map { playerMoves =>
@@ -436,17 +391,12 @@ object Arena {
       }
     }
 
-    playerMovesFuture.map(performMoves(readyArena)).map(state => current.copy(state = state))
+    playerMovesFuture.map(performMoves(current))
   }
 
   def arenaStateToArenaUpdate(arenaState: ArenaState): ArenaUpdate = {
-    val playersStates = arenaState.config.players.flatMap { player =>
-      arenaState.state.get(player.service).map(player -> _)
-    }.toMap
-
     val canResetIn = resetLimit - java.time.Duration.between(arenaState.startTime, ZonedDateTime.now()).toScala
-
-    ArenaUpdate(arenaState.config.path, ArenaDimsAndPlayers(arenaState.config.name, arenaState.config.emojiCode, calcDimensions(arenaState.state.size), playersStates, canResetIn))
+    ArenaUpdate(arenaState, canResetIn)
   }
 
   def performArenaUpdate(arenaState: ArenaState)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
@@ -457,8 +407,8 @@ object Arena {
 
 object Player {
   type Service = String
-  implicit val urlWrites = Writes[URL](url => JsString(url.toString))
-  implicit val playerWrites = Json.writes[Player]
+  implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
+  implicit val playerWrites: Writes[Player] = Json.writes[Player]
 }
 
 // todo: encode the circular laws in types
@@ -474,7 +424,7 @@ object Direction {
 
   case object E extends Direction
 
-  implicit val jsonWrites = Writes[Direction] {
+  implicit val jsonWrites: Writes[Direction] = Writes[Direction] {
     case N => JsString("N")
     case W => JsString("W")
     case S => JsString("S")

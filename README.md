@@ -1,4 +1,4 @@
-Cloud Bowl
+ Cloud Bowl
 ----------
 
 A game where microservices battle each other in a giant real-time bowl.
@@ -22,8 +22,7 @@ Run Locally:
     ```
 1. Start the sample service
     ```
-    cd samples/scala-play
-    ./sbt run
+    (cd samples/scala-play; ./sbt run)
     ```
 1. Start the apps.dev Kafka event producer
     ```
@@ -31,8 +30,10 @@ Run Locally:
     ```
     You can send commands like
     ```
+    ARENA/create
+    ARENA/playerjoin
+    ARENA/playerleave/ID
     ARENA/viewerjoin
-    ARENA/playersrefresh
     ARENA/scoresreset
     ```
 1. Start the Viewer web app
@@ -48,25 +49,6 @@ Pause the Arena refresh:
 ```
 document.body.dataset.paused = true;
 ```
-
-
-Testing:
-
-For GitHub Player backend:
-
-1. Create a GitHub App with perm *Contents - Read-Only*
-1. Generate a private key
-1. `export GITHUB_APP_PRIVATE_KEY=$(cat ~/somewhere/your-integration.2017-02-07.private-key.pem)`
-1. `export GITHUB_APP_ID=YOUR_NUMERIC_GITHUB_APP_ID`
-1. `export GITHUB_ORGREPO=cloudbowl/arenas`
-1. Run the tests:
-    ```
-    ./sbt test
-    ```
-
-For Google Sheets Player backend:
-
-1. TODO
 
 
 ## Run on Google Cloud

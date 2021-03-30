@@ -16,29 +16,30 @@
 
 package apps
 
-import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{MergeHub, Source}
-import models.Arena
-import models.Arena.{ArenaState, KafkaConfig, Pathed, PathedPlayersRefresh, PathedScoresReset}
-import models.Events.{ArenaDimsAndPlayers, ArenaUpdate}
+import akka.stream.scaladsl.MergeHub
+import models.{Arena, Player}
+import models.Arena.{ArenaState, KafkaConfig, Pathed, PathedArenaRefresh, PathedPlayers, PathedScoresReset}
+import models.Events.{ArenaUpdate, PlayerJoin, PlayerLeave}
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.Environment
+import play.api.libs.ws.WSClient
+import play.api.{Configuration, Environment}
 import play.api.libs.ws.ahc.AhcWSClient
 
+import scala.concurrent.{ExecutionContextExecutor, TimeoutException}
 import scala.concurrent.duration._
 
 // todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
 
 object Battle extends App {
 
-  implicit val actorSystem = ActorSystem()
+  private implicit val actorSystem: ActorSystem = ActorSystem()
 
-  implicit val ec = actorSystem.dispatcher
+  private implicit val ec: ExecutionContextExecutor = actorSystem.dispatcher
 
-  implicit val wsClient = AhcWSClient()
+  private implicit val wsClient: WSClient = AhcWSClient()
 
-  implicit val config = play.api.Configuration.load(Environment.simple())
+  private implicit val config: Configuration = play.api.Configuration.load(Environment.simple())
 
   val groupId = "battle"
 
@@ -46,37 +47,58 @@ object Battle extends App {
 
   val viewerEventsSource = KafkaConfig.SinksAndSources.viewerPingSource(groupId).map(_.key())
 
-  val playersRefreshSource = KafkaConfig.SinksAndSources.playersRefreshSource(groupId).map { record =>
-    PathedPlayersRefresh(record.key())
-  }
+  val playerUpdateSource = KafkaConfig.SinksAndSources.playerUpdateSource(groupId)
 
   val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId).map { record =>
     PathedScoresReset(record.key())
   }
 
-  def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaDimsAndPlayers] = {
-    new ProducerRecord(KafkaConfig.Topics.arenaUpdate, arenaUpdate.path, arenaUpdate.arenaDimsAndPlayers)
+  def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaUpdate] = {
+    new ProducerRecord(KafkaConfig.Topics.arenaUpdate, arenaUpdate.arenaState.config.path, arenaUpdate)
   }
 
   val sink = MergeHub.source[Pathed](16)
-    .groupBy(Int.MaxValue, _.path, true)
+    .groupBy(Int.MaxValue, _.path, allowClosedSubstreamRecreation = true)
     .scanAsync(Option.empty[ArenaState])(Arena.processArenaEvent)
-    .mapConcat(_.toSeq)
-    .filter(_.config.players.nonEmpty)
+    .collect { case Some(s) => s }
+    //.filter(_.config.players.nonEmpty)
     .map(Arena.arenaStateToArenaUpdate)
     .map(arenaUpdateToProducerRecord)
     .to(arenaUpdateSink)
     .run()
 
-  val arenaRefresh = viewerEventsSource
-    .groupBy(Int.MaxValue, identity)
-    .map(Left(_))
-    .merge(Source.repeat(NotUsed).throttle(1, 1.second).map(Right(_)))
-    .statefulMapConcat(Arena.hasViewers)
+  // if the substream is idle for 30 seconds, it closes
+  // takes any rate of viewer pings and turns it into a constant rate of 1 per second
+  val viewersSource = viewerEventsSource
+    .groupBy(Int.MaxValue, identity, allowClosedSubstreamRecreation = true)
+    .idleTimeout(30.seconds)
+    .map { path =>
+      Some(PathedArenaRefresh(path))
+    }
+    .expand(Iterator.continually(_))
+    .throttle(1, 1.second)
+    .recover {
+      // turns the cancel into completion just to avoid the logging of the error
+      case _: TimeoutException =>
+        None
+    }
+    .collect { case Some(s) => s }
     .to(sink)
     .run()
 
-  val playersRefresh = playersRefreshSource
+  val playerUpdate = playerUpdateSource
+    .groupBy(Int.MaxValue, _.key(), allowClosedSubstreamRecreation = true)
+    .scan(Option.empty[(Arena.Path, Set[Player])]) { (maybePlayers, record) =>
+      val players = maybePlayers.fold(Set.empty[Player])(_._2)
+      val updatedPlayers = record.value() match {
+        case PlayerJoin(player) => players + player
+        case PlayerLeave(service) => players.filterNot(_.service == service)
+      }
+      Some(record.key() -> updatedPlayers)
+    }
+    .collect {
+      case Some((path, players)) => PathedPlayers(path, players)
+    }
     .to(sink)
     .run()
 
@@ -89,3 +111,4 @@ object Battle extends App {
   }
 
 }
+

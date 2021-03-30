@@ -1,13 +1,30 @@
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
 metadata:
-  name: players-refresh
+  name: player-update
   namespace: kafka
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
   partitions: 10
   replicas: 2
+  config:
+      retention.ms: -1
+      retention.bytes: -1
+---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: arena-config
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: cloudbowl
+spec:
+  partitions: 10
+  replicas: 2
+  config:
+      retention.ms: -1
+      retention.bytes: -1
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
