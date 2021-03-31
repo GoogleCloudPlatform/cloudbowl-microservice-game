@@ -25,6 +25,9 @@ spec:
   config:
       retention.ms: -1
       retention.bytes: -1
+      cleanup.policy: compact
+      delete.retention.ms: 100
+      segment.ms: 100
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic

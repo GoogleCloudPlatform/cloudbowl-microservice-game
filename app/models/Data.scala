@@ -163,6 +163,7 @@ object Arena {
   case class PathedArenaRefresh(path: Path) extends Pathed
   case class PathedScoresReset(path: Path) extends Pathed
   case class PathedPlayers(path: Path, players: Set[Player]) extends Pathed
+  case class PathedArenaConfig(path: Path, arenaConfig: ArenaConfig) extends Pathed
 
   case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode)
   case class ArenaState(config: ArenaConfig, state: Map[Player, PlayerState], startTime: ZonedDateTime) {
@@ -190,32 +191,67 @@ object Arena {
     Dimensions(width, height.toInt)
   }
 
-  def processArenaEvent(state: Option[ArenaState], pathed: Pathed)
-                       (implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
+  // todo: could be Either[ArenaState, (Option[ArenaConfig], Option[Set[Player]])]
+  case class ArenaParts(config: Option[ArenaConfig], state: Option[ArenaState], players: Option[Set[Player]])
 
-    def freshArenaState(config: ArenaConfig): ArenaState = {
-      ArenaState(config, Map.empty[Player, PlayerState], ZonedDateTime.now())
+  def freshArenaState(arenaState: ArenaState): ArenaState = {
+    val board = for {
+      x <- 0 until arenaState.dims.width
+      y <- 0 until arenaState.dims.height
+    } yield x -> y
+
+    val newState = arenaState.state.foldLeft(arenaState.state) { case (updatedState, (player, _)) =>
+      val taken = updatedState.values.map(player => player.x -> player.y)
+      val open = board.diff(taken.toSeq)
+      val spot = Random.shuffle(open).head
+      val newPlayerState = PlayerState(spot._1, spot._2, Direction.random, false, 0, Set.empty)
+
+      updatedState.updated(player, newPlayerState)
     }
 
-    pathed match {
+    ArenaState(arenaState.config, newState, ZonedDateTime.now())
+  }
+
+  def processArenaEvent(arenaParts: ArenaParts, pathed: Pathed)
+                       (implicit ec: ExecutionContext, wsClient: WSClient): Future[ArenaParts] = {
+
+    val updatedArenaParts = pathed match {
+      case PathedArenaConfig(_, arenaConfig) =>
+        arenaParts.copy(config = Some(arenaConfig), state = None)
+
       case PathedPlayers(_, players) =>
-        println(players)
-        Future.successful(state)
+        arenaParts.copy(players = Some(players), state = None)
 
       case PathedArenaRefresh(_) =>
-        // performArenaUpdate
-        Future.successful(state)
+        arenaParts
 
       case PathedScoresReset(_) =>
-        state.fold(Future.successful(Option.empty[ArenaState])) { arenaState =>
+        arenaParts.state.fold(arenaParts) { arenaState =>
           val resetAgo = java.time.Duration.between(arenaState.startTime, ZonedDateTime.now()).toScala
           if (resetAgo.gt(resetLimit)) {
-            performArenaUpdate(freshArenaState(arenaState.config))
+            arenaParts.copy(state = Some(freshArenaState(arenaState)))
           }
           else {
-            Future.successful(Some(arenaState))
+            arenaParts
           }
         }
+    }
+
+    val updatedArenaState = updatedArenaParts match {
+      case ArenaParts(Some(arenaConfig), None, Some(arenaPlayers)) =>
+        val playerStates = arenaPlayers.map { player =>
+          player -> PlayerState(0, 0, Direction.N, false, 0, Set.empty)
+        }.toMap
+        val arenaState = freshArenaState(ArenaState(arenaConfig, playerStates, ZonedDateTime.now()))
+        performArenaUpdate(arenaState)
+      case ArenaParts(_, Some(arenaState), _) =>
+        performArenaUpdate(arenaState)
+      case _ =>
+        Future.successful(None)
+    }
+
+    updatedArenaState.map { maybeUpdatedState =>
+      updatedArenaParts.copy(state = maybeUpdatedState)
     }
   }
 
@@ -279,20 +315,6 @@ object Arena {
     }
   }
 
-  def addPlayerToArena(arenaState: ArenaState, player: Player): ArenaState = {
-    val board = for {
-      x <- 0 until arenaState.dims.width
-      y <- 0 until arenaState.dims.height
-    } yield x -> y
-
-    val taken = arenaState.state.values.map(player => player.x -> player.y)
-
-    val open = board.diff(taken.toSeq)
-
-    val spot = Random.shuffle(open).head
-
-    ArenaState(arenaState.config, arenaState.state.updated(player, PlayerState(spot._1, spot._2, Direction.random, false, 0, Set.empty)), ZonedDateTime.now())
-  }
 
   def forward(playerState: PlayerState, num: Int): Position = {
     playerState.direction match {

@@ -86,7 +86,7 @@ object KafkaConsumerApp extends App {
 
   val arenaUpdateSource = SinksAndSources.arenaUpdateSource(groupId)
 
-  viewerEventsSource.merge(playerUpdateSource).merge(arenaUpdateSource).runForeach(println)
+  viewerEventsSource.merge(playerUpdateSource).merge(arenaUpdateSource).merge(arenaConfigSource).runForeach(println)
 }
 
 object KafkaProducerApp extends App {

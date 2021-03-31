@@ -173,4 +173,25 @@ class DataSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
+  "freshArenaState" must {
+    "work" in {
+      val player1 = Player("http://foo", "foo", new URL("http://foo"))
+      val player2 = Player("http://bar", "bar", new URL("http://bar"))
+      val player1State = PlayerState(0, 0, Direction.S, true, 1)
+      val player2State = PlayerState(0, 1, Direction.N, true, -1)
+
+      val playerStates = Map(player1 -> player1State, player2 -> player2State)
+
+      val initState = ArenaState(ArenaConfig("test", "test", "test"), playerStates, ZonedDateTime.now())
+
+      val updatedState = Arena.freshArenaState(initState)
+
+      updatedState.state.size must equal (2)
+      updatedState.state(player1).wasHit must equal (false)
+      updatedState.state(player2).wasHit must equal (false)
+      updatedState.state(player1).score must equal (0)
+      updatedState.state(player2).score must equal (0)
+    }
+  }
+
 }

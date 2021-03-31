@@ -37,7 +37,6 @@ object Events {
 
   implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
 
-  /*
   implicit val playerPlayerStateWrites: Writes[(Player, PlayerState)] = (
     (__ \ "name").write[String] ~
     (__ \ "pic").write[URL] ~
@@ -52,7 +51,6 @@ object Events {
 
     (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score, playerState.responseTime.map(_.toMillis))
   }
-   */
 
   implicit val arenaUpdateWrites: Writes[ArenaUpdate] = (
     (__ \ "name").write[String] ~

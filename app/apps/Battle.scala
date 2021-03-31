@@ -19,7 +19,7 @@ package apps
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.MergeHub
 import models.{Arena, Player}
-import models.Arena.{ArenaState, KafkaConfig, Pathed, PathedArenaRefresh, PathedPlayers, PathedScoresReset}
+import models.Arena.{ArenaParts, KafkaConfig, Pathed, PathedArenaConfig, PathedArenaRefresh, PathedPlayers, PathedScoresReset}
 import models.Events.{ArenaUpdate, PlayerJoin, PlayerLeave}
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.libs.ws.WSClient
@@ -45,23 +45,23 @@ object Battle extends App {
 
   val arenaUpdateSink = KafkaConfig.SinksAndSources.arenaUpdateSink
 
+  val arenaConfigSource = KafkaConfig.SinksAndSources.arenaConfigSource(groupId)
+
   val viewerEventsSource = KafkaConfig.SinksAndSources.viewerPingSource(groupId).map(_.key())
 
   val playerUpdateSource = KafkaConfig.SinksAndSources.playerUpdateSource(groupId)
 
-  val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId).map { record =>
-    PathedScoresReset(record.key())
-  }
+  val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId)
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaUpdate] = {
     new ProducerRecord(KafkaConfig.Topics.arenaUpdate, arenaUpdate.arenaState.config.path, arenaUpdate)
   }
 
+  // aggregates arena config, player join/leave, viewer ping, and score reset events
   val sink = MergeHub.source[Pathed](16)
     .groupBy(Int.MaxValue, _.path, allowClosedSubstreamRecreation = true)
-    .scanAsync(Option.empty[ArenaState])(Arena.processArenaEvent)
-    .collect { case Some(s) => s }
-    //.filter(_.config.players.nonEmpty)
+    .scanAsync(ArenaParts(None, None, None))(Arena.processArenaEvent)
+    .collect { case ArenaParts(_, Some(state), _) => state }
     .map(Arena.arenaStateToArenaUpdate)
     .map(arenaUpdateToProducerRecord)
     .to(arenaUpdateSink)
@@ -102,7 +102,17 @@ object Battle extends App {
     .to(sink)
     .run()
 
+  val arenaConfig = arenaConfigSource
+    .map { record =>
+      PathedArenaConfig(record.key(), record.value())
+    }
+    .to(sink)
+    .run()
+
   val scoresReset = scoresResetSource
+    .map { record =>
+      PathedScoresReset(record.key())
+    }
     .to(sink)
     .run()
 
