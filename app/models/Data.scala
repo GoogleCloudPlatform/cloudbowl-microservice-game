@@ -255,6 +255,17 @@ object Arena {
     }
   }
 
+  def playerJson(arenaState: ArenaState, player: Player): JsObject = {
+    Json.obj(
+      "_links" -> Json.obj(
+        "self" -> Json.obj(
+          "href" -> player.service
+        )
+      ),
+      "arena" -> arenaState.json
+    )
+  }
+
   // always returns a successful future
   //
   // todo: score
@@ -277,14 +288,7 @@ object Arena {
   // }
   //
   def playerMoveWs(arenaState: ArenaState, player: Player)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[(Move, FiniteDuration)]] = {
-    val json = Json.obj(
-      "_links" -> Json.obj(
-        "self" -> Json.obj(
-          "href" -> player.service
-        )
-      ),
-      "arena" -> arenaState.json
-    )
+    val json = playerJson(arenaState, player)
 
     // todo: it'd be nice to not reinit this every time
     val timingRequestFilter = WSRequestFilter { requestExecutor =>

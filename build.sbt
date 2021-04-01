@@ -12,7 +12,8 @@ libraryDependencies ++= Seq(
   ws                                                                       ,
   filters                                                                  ,
 
-  "org.webjars"            %% "webjars-play"               % "2.8.0"       ,
+  "org.webjars"            %% "webjars-play"               % "2.8.0-1"     ,
+  "org.webjars"            %  "bootstrap"                  % "4.6.0-1"     ,
 
   "com.typesafe.akka"      %% "akka-stream-kafka"          % "2.0.7"       ,
   "com.lihaoyi"            %% "upickle"                    % "1.3.6"       ,

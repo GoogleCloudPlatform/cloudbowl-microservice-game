@@ -29,8 +29,6 @@ import play.api.libs.ws.ahc.AhcWSClient
 import scala.concurrent.{ExecutionContextExecutor, TimeoutException}
 import scala.concurrent.duration._
 
-// todo: we could go back to using an external store for the state since there will be a brief jostling when the server starts
-
 object Battle extends App {
 
   private implicit val actorSystem: ActorSystem = ActorSystem()
@@ -45,11 +43,7 @@ object Battle extends App {
 
   val arenaUpdateSink = KafkaConfig.SinksAndSources.arenaUpdateSink
 
-  val arenaConfigSource = KafkaConfig.SinksAndSources.arenaConfigSource(groupId)
-
   val viewerEventsSource = KafkaConfig.SinksAndSources.viewerPingSource(groupId).map(_.key())
-
-  val playerUpdateSource = KafkaConfig.SinksAndSources.playerUpdateSource(groupId)
 
   val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId)
 
@@ -86,28 +80,10 @@ object Battle extends App {
     .to(sink)
     .run()
 
-  val playerUpdate = playerUpdateSource
-    .groupBy(Int.MaxValue, _.key(), allowClosedSubstreamRecreation = true)
-    .scan(Option.empty[(Arena.Path, Set[Player])]) { (maybePlayers, record) =>
-      val players = maybePlayers.fold(Set.empty[Player])(_._2)
-      val updatedPlayers = record.value() match {
-        case PlayerJoin(player) => players + player
-        case PlayerLeave(service) => players.filterNot(_.service == service)
-      }
-      Some(record.key() -> updatedPlayers)
-    }
-    .collect {
-      case Some((path, players)) => PathedPlayers(path, players)
-    }
-    .to(sink)
-    .run()
 
-  val arenaConfig = arenaConfigSource
-    .map { record =>
-      PathedArenaConfig(record.key(), record.value())
-    }
-    .to(sink)
-    .run()
+  val playerUpdate = Sources.playerUpdate(groupId).to(sink).run()
+
+  val arenaConfig = Sources.arenaConfig(groupId).to(sink).run()
 
   val scoresReset = scoresResetSource
     .map { record =>
@@ -122,3 +98,32 @@ object Battle extends App {
 
 }
 
+object Sources {
+
+  def playerUpdate(groupId: String)(implicit actorSystem: ActorSystem) = {
+    val playerUpdateSource = KafkaConfig.SinksAndSources.playerUpdateSource(groupId)
+
+    playerUpdateSource
+      .groupBy(Int.MaxValue, _.key(), allowClosedSubstreamRecreation = true)
+      .scan(Option.empty[(Arena.Path, Set[Player])]) { (maybePlayers, record) =>
+        val players = maybePlayers.fold(Set.empty[Player])(_._2)
+        val updatedPlayers = record.value() match {
+          case PlayerJoin(player) => players + player
+          case PlayerLeave(service) => players.filterNot(_.service == service)
+        }
+        Some(record.key() -> updatedPlayers)
+      }
+      .collect {
+        case Some((path, players)) => PathedPlayers(path, players)
+      }
+  }
+
+  def arenaConfig(groupId: String)(implicit actorSystem: ActorSystem) = {
+    val arenaConfigSource = KafkaConfig.SinksAndSources.arenaConfigSource(groupId)
+
+    arenaConfigSource.map { record =>
+      PathedArenaConfig(record.key(), record.value())
+    }
+  }
+
+}
