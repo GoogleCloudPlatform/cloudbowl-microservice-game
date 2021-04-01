@@ -50,6 +50,15 @@ body {
     font-size: 32pt;
 }
 
+#join {
+    float: right;
+    margin-top: 20px;
+}
+
+#join>button {
+    font-size: 14px;
+}
+
 /* make sure the notch doesn't cover the title */
 @media only screen and (orientation: landscape) {
     #title {
