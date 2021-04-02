@@ -82,8 +82,7 @@ spec:
       - name: $REPO_NAME
         image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
         imagePullPolicy: IfNotPresent
-        args:
-        - battle
+        command: ["battle"]
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: cloudbowl-kafka-bootstrap.kafka:9092
