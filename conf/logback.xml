@@ -11,7 +11,7 @@
 
     <appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
+            <level>TRACE</level>
         </filter>
         <appender-ref ref="STDOUT" />
     </appender>
@@ -20,6 +20,7 @@
     <logger name="application" level="INFO" />
     <logger name="org.apache.kafka" level="ERROR" />
     <logger name="akka" level="INFO" />
+    <logger name="play.filters.CSRF" level="TRACE" />
 
     <root>
         <appender-ref ref="ASYNCSTDOUT" />
