@@ -3,9 +3,11 @@ GET         /favicon.ico                                controllers.Default.notF
 GET         /:arena                                     controllers.Main.index(arena)
 GET         /:arena/join                                controllers.Main.join(arena)
 GET         /:arena/updates                             controllers.Main.updates(arena, uuid: java.util.UUID)
+GET         /:arena/admin                               controllers.Main.admin(arena)
 
 POST        /:arena/scoresreset                         controllers.Main.scoresReset(arena)
 POST        /:arena/join                                controllers.Main.joinValidate(arena)
+POST        /:arena/admin                               controllers.Main.adminValidate(arena)
 
 GET         /assets/*file                               controllers.Assets.versioned(path="/public", file: Asset)
 ->          /webjars                                    webjars.Routes

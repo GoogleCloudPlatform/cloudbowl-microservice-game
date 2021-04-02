@@ -16,19 +16,16 @@
 
 package controllers
 
-import java.util.UUID
 import akka.actor.{Actor, ActorSystem, Kill, Props}
 import akka.pattern.ask
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
 import com.google.inject.AbstractModule
-
-import javax.inject.{Inject, Singleton}
-import models.{Arena, Direction, Player, PlayerState}
-import models.Arena.{ArenaConfig, ArenaState, Path, PathedPlayers}
+import models.Arena.{ArenaConfig, ArenaState, PathedArenaConfig, PathedPlayers}
 import models.Events._
+import models.{Arena, Direction, Player, PlayerState}
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.{Configuration, Environment}
+import play.api.Configuration
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.json.{JsValue, Json}
@@ -37,17 +34,23 @@ import play.api.mvc.InjectedController
 
 import java.net.URL
 import java.time.ZonedDateTime
+import java.util.UUID
+import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-class Main @Inject()(query: Query, joinTemplate: views.html.join, wsClient: WSClient, configuration: Configuration)
+// todo: possible race condition - for join & admin, players & arena config may not have been received when the form is submitted
+class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate: views.html.admin, wsClient: WSClient, configuration: Configuration)
                     (implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
   val avatarBaseUrl = configuration.get[String]("avatar.base.url")
 
+  val maybeAdminPassword = configuration.getOptional[String]("admin.password")
+
   val viewerEventSink = Arena.KafkaConfig.SinksAndSources.viewerEventSink
   val scoresResetSink = Arena.KafkaConfig.SinksAndSources.scoresResetSink
   val playerUpdateSink = Arena.KafkaConfig.SinksAndSources.playerUpdateSink
+  val arenaConfigSink = Arena.KafkaConfig.SinksAndSources.arenaConfigSink
 
   def index(arena: Arena.Path) = Action { implicit request =>
     Ok(views.html.index(arena))
@@ -127,7 +130,7 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, wsClient: WSCl
           }
 
           val player = Player(service, name, new URL(pic))
-          val record = new ProducerRecord[Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
+          val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
           Source.single(record).to(playerUpdateSink).run()
           Redirect(controllers.routes.Main.index(arena))
         case _ =>
@@ -167,26 +170,85 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, wsClient: WSCl
     }
   }
 
+  // todo: remove players
+  def admin(arena: Arena.Path) = Action.async { implicit request =>
+    query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].map { arenaConfig =>
+      Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None))
+    }
+  }
+
+  def adminValidate(arena: Arena.Path) = Action.async(parse.formUrlEncoded) { implicit request =>
+    val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
+    val maybeEmoji = request.body.get("emoji").flatMap(_.headOption).filter(_.nonEmpty)
+    val maybeProvidedAdminPassword = request.body.get("adminPassword").flatMap(_.headOption).filter(_.nonEmpty)
+
+    // to Either[Error, EmojiCode]
+    val emojiInvalidFuture = maybeEmoji.fold[Future[Option[String]]](Future.successful(None)) { emoji =>
+      val emojiCode = emoji.toLowerCase
+      wsClient.url(s"https://noto-website-2.storage.googleapis.com/emoji/emoji_u$emojiCode.png").get().map { response =>
+        if (response.status == OK) {
+          None
+        }
+        else {
+          Some("Emoji not found")
+        }
+      }
+    }
+
+    val adminPasswordInvalid = maybeAdminPassword.flatMap { adminPassword =>
+      Option.unless(maybeProvidedAdminPassword.contains(adminPassword))("Incorrect Admin Password")
+    }
+
+    emojiInvalidFuture.map { emojiInvalid =>
+      (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid) match {
+        case (Some(name), Some(emoji), None, None) =>
+          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase)
+          val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
+          Source.single(record).to(arenaConfigSink).run()
+          // todo: when there are no players, the arena does not load
+          Redirect(controllers.routes.Main.index(arena))
+
+        case _ =>
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid))
+      }
+    }
+  }
+
 }
 
 @Singleton
 class Query @Inject()(implicit actorSystem: ActorSystem) {
 
+  val groupId = UUID.randomUUID().toString
+
   class PlayerUpdateActor extends Actor {
-    val allPlayers = scala.collection.mutable.Map.empty[Path, Set[Player]]
+    val allPlayers = scala.collection.mutable.Map.empty[Arena.Path, Set[Player]]
 
     override def receive = {
       case PathedPlayers(path, players) =>
         allPlayers.update(path, players)
-      case path: Path =>
+      case path: Arena.Path =>
         sender() ! allPlayers.getOrElse(path, Set.empty)
     }
   }
 
-  val groupId = UUID.randomUUID().toString
-
   val playerUpdateActorRef = actorSystem.actorOf(Props(new PlayerUpdateActor))
   val playerUpdate = apps.Sources.playerUpdate(groupId).to(Sink.actorRef(playerUpdateActorRef, Kill, _ => Kill)).run()
+
+
+  class ArenaConfigActor extends Actor {
+    val arenaConfigs = scala.collection.mutable.Map.empty[Arena.Path, ArenaConfig]
+
+    override def receive = {
+      case PathedArenaConfig(path, arenaConfig) =>
+        arenaConfigs.update(path, arenaConfig)
+      case path: Arena.Path =>
+        sender() ! arenaConfigs.get(path)
+    }
+  }
+
+  val arenaConfigActorRef = actorSystem.actorOf(Props(new ArenaConfigActor))
+  val arenaConfig = apps.Sources.arenaConfig(groupId).to(Sink.actorRef(arenaConfigActorRef, Kill, _ => Kill)).run()
 }
 
 class StartModule extends AbstractModule {

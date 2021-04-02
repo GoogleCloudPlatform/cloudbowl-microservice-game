@@ -18,17 +18,10 @@ const println = console.log;
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    for (const tag of document.getElementsByTagName('button')) {
-        tag.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'action';
-            input.value = tag.value;
-            tag.form.appendChild(input);
-            tag.disabled = true;
-            tag.form.submit();
-        });
-    }
+    document.getElementById('emoji').addEventListener('change', (event) => {
+        const emojiCode = event.target.value.toLowerCase();
+        document.getElementById('emojiImg').src = `https://noto-website-2.storage.googleapis.com/emoji/emoji_u${emojiCode}.png`;
+    });
 
 });
 

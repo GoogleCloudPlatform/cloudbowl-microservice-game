@@ -1,0 +1,98 @@
+@*
+ * Copyright 2020 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *@
+
+@this(webJarsUtil: org.webjars.play.WebJarsUtil)
+@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String])(implicit request: RequestHeader)
+
+@import helper._
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <title>Cloud Bowl</title>
+
+    @webJarsUtil.locate("bootstrap.min.css").css()
+
+    <style type="text/css">
+        .container {
+            margin-top: 50px;
+        }
+    </style>
+
+    <script src="@routes.Assets.versioned("javascripts/admin.js")"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-sm">
+                <div class="card">
+                    <h5 class="card-header">Create / Update @arena Arena</h5>
+                    <div class="card-body">
+                        @form(controllers.routes.Main.adminValidate(arena)) {
+                            @CSRF.formField
+
+                            <div class="form-group">
+                                <label for="name">Arena Name</label>
+                                <input class="form-control" id="name" name="name" value="@name.getOrElse("")" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="emoji">Emoji Hex Code <small id="emojiHelp" class="text-muted">(Pick from <a href="https://www.google.com/get/noto/help/emoji/" target="_blank">the Noto Emoji</a>)</small></label>
+                                @emoji.fold {
+                                    <input class="form-control" id="emoji" name="emoji" type="text" aria-describedby="emojiHelp" placeholder="1F600" required>
+                                    <img id="emojiImg" width="64" style="margin-top: 10px;">
+                                } { emojiCode =>
+                                    @emojiInvalid.fold {
+                                        <input class="form-control is-valid" id="emoji" name="emoji" type="text" aria-describedby="emojiHelp" value="@emojiCode" placeholder="1F600" required>
+                                        <img id="emojiImg" src="https://noto-website-2.storage.googleapis.com/emoji/emoji_u@{emojiCode}.png" width="64" style="margin-top: 10px;">
+                                    } { message =>
+                                        <input class="form-control is-invalid" id="emoji" name="emoji" type="text" aria-describedby="emojiHelp" value="@emojiCode" placeholder="1F600" required>
+                                        <div class="invalid-feedback">
+                                            @message
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            @if(requiresAdminPassword) {
+                                <div class="form-group">
+                                    <label for="adminPassword">Admin Password</label>
+                                    @adminPassword.fold {
+                                        <input class="form-control" id="adminPassword" name="adminPassword" type="password" required>
+                                    } { providedAdminPassword =>
+                                        @adminPasswordInvalid.fold {
+                                            <input class="form-control is-valid" id="adminPassword" name="adminPassword" type="password" value="@providedAdminPassword" required>
+                                        } { message =>
+                                            <input class="form-control is-invalid" id="adminPassword" name="adminPassword" type="password" value="@providedAdminPassword" required>
+                                            <div class="invalid-feedback">
+                                                @message
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+
+                            <button class="btn btn-success" type="submit">Create / Update Arena</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
