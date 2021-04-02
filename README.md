@@ -100,9 +100,10 @@ document.body.dataset.paused = true;
     data:
       WEBJARS_USE_CDN: 'true'
       APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
+      ADMIN_PASSWORD: # Used for creating / updating arenas
     EOF
     ```
-1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
+1. Setup Cloud Build with a trigger on master, excluding `samples/**`, with Configuration Type set to *Cloud Build configuration file*, and substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
 1. Once the service is deployed, setup the domain name:
     ```
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')

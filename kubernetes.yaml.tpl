@@ -117,6 +117,11 @@ spec:
             configMapKeyRef:
               key: APPLICATION_SECRET
               name: cloudbowl-config
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              key: ADMIN_PASSWORD
+              name: cloudbowl-config
         resources:
           limits:
             cpu: "2"
