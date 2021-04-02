@@ -1,4 +1,4 @@
- Cloud Bowl
+Cloud Bowl
 ----------
 
 A game where microservices battle each other in a giant real-time bowl.
