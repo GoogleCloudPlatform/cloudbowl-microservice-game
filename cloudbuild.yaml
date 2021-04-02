@@ -4,6 +4,7 @@ steps:
   args: ['test']
 
 - name: 'gcr.io/k8s-skaffold/pack'
+  entrypoint: 'pack'
   args: ['build', '--builder=heroku/buildpacks:18', '--publish', 'gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 
 #- name: 'gcr.io/cloud-builders/gcloud'
