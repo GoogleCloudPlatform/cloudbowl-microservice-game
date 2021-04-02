@@ -90,9 +90,6 @@ document.body.dataset.paused = true;
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
     echo $IP_ADDRESS
     ```
-1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://IP_ADDRESS.nip.io/playersrefresh) and with a preshared key you have made up.  For permissions, select Contents *Read-only* and for Events select *Push*.
-1. Generate a Private Key for the GitHub App
-1. Install the GitHub App on the repo that will hold the players
 1. Create a ConfigMap named `cloudbowl-config`:
     ```
     cat <<EOF | kubectl apply -f -
@@ -101,14 +98,9 @@ document.body.dataset.paused = true;
     metadata:
       name: cloudbowl-config
     data:
-      GITHUB_ORGREPO: # Your GitHub Org/Repo
-      GITHUB_APP_ID: # Your GitHub App ID
-      GITHUB_PSK: # Your GitHub WebHook's preshared key
       WEBJARS_USE_CDN: 'true'
       APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
     EOF
-
-    kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem
     ```
 1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
 1. Once the service is deployed, setup the domain name:
