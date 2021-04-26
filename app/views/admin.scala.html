@@ -15,7 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String])(implicit request: RequestHeader)
+@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL])(implicit request: RequestHeader)
 
 @import helper._
 
@@ -68,6 +68,11 @@
                                         </div>
                                     }
                                 }
+                            </div>
+
+                            <div class="form-group">
+                                <label for="instructions">Instructions</label>
+                                <input class="form-control" id="instructions" name="instructions" type="url" value="@instructions.getOrElse("")">
                             </div>
 
                             @if(requiresAdminPassword) {

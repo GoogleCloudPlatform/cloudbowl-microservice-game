@@ -20,7 +20,7 @@
     <logger name="application" level="INFO" />
     <logger name="org.apache.kafka" level="ERROR" />
     <logger name="akka" level="INFO" />
-    <logger name="play.filters.CSRF" level="TRACE" />
+    <logger name="play.filters.CSRF" level="INFO" />
 
     <root>
         <appender-ref ref="ASYNCSTDOUT" />

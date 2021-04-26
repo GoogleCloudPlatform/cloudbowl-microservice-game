@@ -16,9 +16,6 @@
 
 package apps.dev
 
-import java.io.{File, FileOutputStream}
-import java.nio.file.Files
-import java.util.{Properties, UUID}
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import com.dimafeng.testcontainers.KafkaContainer
@@ -32,7 +29,10 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.Serializer
 import services.Kafka
 
+import java.io.{File, FileOutputStream}
 import java.net.URL
+import java.nio.file.Files
+import java.util.{Properties, UUID}
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.jdk.CollectionConverters._
@@ -110,7 +110,7 @@ object KafkaProducerApp extends App {
     if (line.nonEmpty) {
       line.split("/") match {
         case Array(arena, "create") =>
-          val arenaConfig = ArenaConfig(arena, arena, "2728")
+          val arenaConfig = ArenaConfig(arena, arena, "2728", Some(new URL("https://github.com/cloudbowl/arenas")))
           send(Topics.arenaConfig, arena, arenaConfig)
 
         case Array(arena, "playerjoin") =>

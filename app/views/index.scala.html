@@ -109,9 +109,14 @@
 <body data-updatesurl="@controllers.routes.Main.updates(arena, java.util.UUID.randomUUID)">
     <div>
         <span id="title"></span>
-        <form id="join" action="@controllers.routes.Main.join(arena)">
-            <button type="submit">join</button>
-        </form>
+        <div id="links">
+            <form id="instructions">
+                <button type="submit" formtarget="_blank">instructions</button>
+            </form>
+            <form id="join" action="@controllers.routes.Main.join(arena)">
+                <button type="submit">join</button>
+            </form>
+        </div>
     </div>
     <div id="arena"></div>
     <span id="scoreboardTitle">

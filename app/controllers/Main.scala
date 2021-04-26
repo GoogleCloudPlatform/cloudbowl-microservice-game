@@ -18,7 +18,8 @@ package controllers
 
 import akka.actor.{Actor, ActorSystem, Kill, Props}
 import akka.pattern.ask
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.{BroadcastHub, Keep, Sink, Source}
 import akka.util.Timeout
 import com.google.inject.AbstractModule
 import models.Arena.{ArenaConfig, ArenaState, PathedArenaConfig, PathedPlayers}
@@ -38,19 +39,27 @@ import java.util.UUID
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 // todo: possible race condition - for join & admin, players & arena config may not have been received when the form is submitted
 class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate: views.html.admin, wsClient: WSClient, configuration: Configuration)
                     (implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
-  val avatarBaseUrl = configuration.get[String]("avatar.base.url")
+  private val avatarBaseUrl = configuration.get[String]("avatar.base.url")
 
-  val maybeAdminPassword = configuration.getOptional[String]("admin.password")
+  private val maybeAdminPassword = configuration.getOptional[String]("admin.password")
 
-  val viewerEventSink = Arena.KafkaConfig.SinksAndSources.viewerEventSink
-  val scoresResetSink = Arena.KafkaConfig.SinksAndSources.scoresResetSink
-  val playerUpdateSink = Arena.KafkaConfig.SinksAndSources.playerUpdateSink
-  val arenaConfigSink = Arena.KafkaConfig.SinksAndSources.arenaConfigSink
+  private val viewerEventSink = Arena.KafkaConfig.SinksAndSources.viewerEventSink
+  private val scoresResetSink = Arena.KafkaConfig.SinksAndSources.scoresResetSink
+  private val playerUpdateSink = Arena.KafkaConfig.SinksAndSources.playerUpdateSink
+  private val arenaConfigSink = Arena.KafkaConfig.SinksAndSources.arenaConfigSink
+
+  // each instance gets it's own groupId so that everyone receives all the updates
+  private val groupId = UUID.randomUUID().toString
+
+  private val arenaUpdateSource = Arena.KafkaConfig.SinksAndSources.arenaUpdateSource(groupId)
+    .buffer(2, OverflowStrategy.dropTail)
+    .toMat(BroadcastHub.sink(bufferSize = 2))(Keep.right).run()
 
   def index(arena: Arena.Path) = Action { implicit request =>
     Ok(views.html.index(arena))
@@ -149,7 +158,6 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
     val viewerPingSource = Source.tick(1.second, 15.seconds, ping).alsoTo(viewerEventSink)
 
     val arenaUpdates: Source[EventSource.Event, _] = {
-      val arenaUpdateSource = Arena.KafkaConfig.SinksAndSources.arenaUpdateSource(uuid.toString)
       arenaUpdateSource.filter(_.key() == arena).map { message =>
         Json.toJson(message.value())
       }.via(EventSource.flow[JsValue])
@@ -173,7 +181,7 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
   // todo: remove players
   def admin(arena: Arena.Path) = Action.async { implicit request =>
     query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].map { arenaConfig =>
-      Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None))
+      Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, None))
     }
   }
 
@@ -181,6 +189,9 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
     val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
     val maybeEmoji = request.body.get("emoji").flatMap(_.headOption).filter(_.nonEmpty)
     val maybeProvidedAdminPassword = request.body.get("adminPassword").flatMap(_.headOption).filter(_.nonEmpty)
+    val maybeInstructions = request.body.get("instructions").flatMap(_.headOption).flatMap { url =>
+      Try(new URL(url)).toOption
+    }
 
     // to Either[Error, EmojiCode]
     val emojiInvalidFuture = maybeEmoji.fold[Future[Option[String]]](Future.successful(None)) { emoji =>
@@ -200,16 +211,16 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
     }
 
     emojiInvalidFuture.map { emojiInvalid =>
-      (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid) match {
-        case (Some(name), Some(emoji), None, None) =>
-          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase)
+      (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid, maybeInstructions) match {
+        case (Some(name), Some(emoji), None, None, instructions) =>
+          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions)
           val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
           Source.single(record).to(arenaConfigSink).run()
           // todo: when there are no players, the arena does not load
           Redirect(controllers.routes.Main.index(arena))
 
         case _ =>
-          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid))
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions))
       }
     }
   }

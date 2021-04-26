@@ -18,16 +18,16 @@ package apps
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.MergeHub
-import models.{Arena, Player}
-import models.Arena.{ArenaParts, KafkaConfig, Pathed, PathedArenaConfig, PathedArenaRefresh, PathedPlayers, PathedScoresReset}
+import models.Arena._
 import models.Events.{ArenaUpdate, PlayerJoin, PlayerLeave}
+import models.{Arena, Player}
 import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.libs.ws.WSClient
-import play.api.{Configuration, Environment}
 import play.api.libs.ws.ahc.AhcWSClient
+import play.api.{Configuration, Environment}
 
-import scala.concurrent.{ExecutionContextExecutor, TimeoutException}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContextExecutor, TimeoutException}
 
 object Battle extends App {
 
@@ -54,7 +54,7 @@ object Battle extends App {
   // aggregates arena config, player join/leave, viewer ping, and score reset events
   val sink = MergeHub.source[Pathed](16)
     .groupBy(Int.MaxValue, _.path, allowClosedSubstreamRecreation = true)
-    .scanAsync(ArenaParts(None, None, None))(Arena.processArenaEvent)
+    .scanAsync(ArenaParts(None, None, Set.empty))(Arena.processArenaEvent)
     .collect { case ArenaParts(_, Some(state), _) => state }
     .map(Arena.arenaStateToArenaUpdate)
     .map(arenaUpdateToProducerRecord)

@@ -17,12 +17,11 @@
 package models
 
 import models.Arena.ArenaState
-
-import java.net.URL
 import models.Direction.Direction
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsString, Writes, __}
 
+import java.net.URL
 import scala.concurrent.duration.FiniteDuration
 
 object Events {
@@ -55,6 +54,7 @@ object Events {
   implicit val arenaUpdateWrites: Writes[ArenaUpdate] = (
     (__ \ "name").write[String] ~
     (__ \ "emoji_code").write[String] ~
+    (__ \ "instructions").writeNullable[URL] ~
     (__ \ "width").write[Int] ~
     (__ \ "height").write[Int] ~
     (__ \ "can_reset_in_seconds").write[Long] ~
@@ -63,12 +63,12 @@ object Events {
     (
       arenaUpdate.arenaState.config.name,
       arenaUpdate.arenaState.config.emojiCode,
+      arenaUpdate.arenaState.config.instructions,
       arenaUpdate.arenaState.dims.width,
       arenaUpdate.arenaState.dims.height,
       arenaUpdate.canResetIn.toSeconds,
       arenaUpdate.arenaState.state,
     )
   }
-
 
 }

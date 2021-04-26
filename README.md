@@ -10,19 +10,17 @@ Run Locally:
     ```
     ./sbt "runMain apps.dev.KafkaApp"
     ```
+1. Start the sample service
+    ```
+    (cd samples/scala-play; ./sbt run)
+    ```
 1. Start the Battle
-
-    TODO: player backends
     ```
     ./sbt "runMain apps.Battle"
     ```
 1. Start the apps.dev Kafka event viewer
     ```
     ./sbt "runMain apps.dev.KafkaConsumerApp"
-    ```
-1. Start the sample service
-    ```
-    (cd samples/scala-play; ./sbt run)
     ```
 1. Start the apps.dev Kafka event producer
     ```

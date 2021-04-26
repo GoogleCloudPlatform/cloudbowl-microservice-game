@@ -165,7 +165,7 @@ object Arena {
   case class PathedPlayers(path: Path, players: Set[Player]) extends Pathed
   case class PathedArenaConfig(path: Path, arenaConfig: ArenaConfig) extends Pathed
 
-  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode)
+  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode, instructions: Option[URL] = None)
   case class ArenaState(config: ArenaConfig, state: Map[Player, PlayerState], startTime: ZonedDateTime) {
     val dims: Dimensions = calcDimensions(state.keys.size)
 
@@ -192,7 +192,7 @@ object Arena {
   }
 
   // todo: could be Either[ArenaState, (Option[ArenaConfig], Option[Set[Player]])]
-  case class ArenaParts(config: Option[ArenaConfig], state: Option[ArenaState], players: Option[Set[Player]])
+  case class ArenaParts(config: Option[ArenaConfig], state: Option[ArenaState], players: Set[Player])
 
   def freshArenaState(arenaState: ArenaState): ArenaState = {
     val board = for {
@@ -220,7 +220,7 @@ object Arena {
         arenaParts.copy(config = Some(arenaConfig), state = None)
 
       case PathedPlayers(_, players) =>
-        arenaParts.copy(players = Some(players), state = None)
+        arenaParts.copy(players = players, state = None)
 
       case PathedArenaRefresh(_) =>
         arenaParts
@@ -238,7 +238,7 @@ object Arena {
     }
 
     val updatedArenaState = updatedArenaParts match {
-      case ArenaParts(Some(arenaConfig), None, Some(arenaPlayers)) =>
+      case ArenaParts(Some(arenaConfig), None, arenaPlayers) =>
         val playerStates = arenaPlayers.map { player =>
           player -> PlayerState(0, 0, Direction.N, false, 0, Set.empty)
         }.toMap
