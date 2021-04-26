@@ -1,0 +1,102 @@
+@*
+ * Copyright 2020 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *@
+
+@this(webJarsUtil: org.webjars.play.WebJarsUtil)
+@(arena: Arena.Path, name: Option[String], url: Option[String], urlInvalid: Option[String], githubUser: Option[String], githubUserInvalid: Option[String])(implicit request: RequestHeader)
+
+@import helper._
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <title>Cloud Bowl</title>
+
+    @webJarsUtil.locate("bootstrap.min.css").css()
+
+    <style type="text/css">
+        .container {
+            margin-top: 50px;
+        }
+    </style>
+
+    <script src="@routes.Assets.versioned("javascripts/join.js")"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-sm">
+                <div class="card">
+                    <h5 class="card-header">Join the @arena Arena</h5>
+                    <div class="card-body">
+                        @form(controllers.routes.Main.joinValidate(arena)) {
+                            @CSRF.formField
+                            <div class="form-group">
+                                <label for="name">Your Name</label>
+                                <input class="form-control" id="name" name="name" value="@name.getOrElse("")" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="url">Microservice URL</label>
+
+                                @url.fold {
+                                    <input type="url" class="form-control" id="url" name="url" required>
+                                } { sUrl =>
+                                    @urlInvalid.fold {
+                                        <input type="url" class="form-control is-valid" id="url" name="url" value="@sUrl" required>
+                                        <div class="valid-feedback">
+                                            Looks good!
+                                        </div>
+                                    } { message =>
+                                        <input type="url" class="form-control is-invalid" id="url" name="url" value="@sUrl" required>
+                                        <div class="invalid-feedback">
+                                            @message
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <div class="form-group">
+                                <label for="githubUsername">GitHub Username (optional)</label>
+
+                                @githubUser.fold {
+                                    <input class="form-control" id="githubUsername" name="githubUsername">
+                                } { sGithubUser =>
+                                    @githubUserInvalid.fold {
+                                        <input class="form-control is-valid" id="githubUsername" name="githubUsername" value="@sGithubUser">
+                                        <img src="https://github.com/@{sGithubUser}.png" width="64" style="margin-top: 10px;">
+                                    } { message =>
+                                        <input class="form-control is-invalid" id="githubUsername" name="githubUsername" value="@sGithubUser">
+                                        <div class="invalid-feedback">
+                                            @message
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            @if(name.isDefined && url.isDefined && urlInvalid.isEmpty && githubUserInvalid.isEmpty) {
+                                <button class="btn btn-primary" type="submit" name="action" value="verify">Reverify</button>
+                                <button class="btn btn-success" type="submit" name="action" value="add">Add Microservice</button>
+                            } else {
+                                <button class="btn btn-primary" type="submit" name="action" value="verify">Verify</button>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

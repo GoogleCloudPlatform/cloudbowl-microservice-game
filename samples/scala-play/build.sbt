@@ -6,9 +6,7 @@ scalaSource in Compile := baseDirectory.value / "app"
 
 resourceDirectory in Compile := baseDirectory.value / "app"
 
-scalaVersion := "2.13.4"
-
-resolvers += Resolver.mavenLocal
+scalaVersion := "2.13.5"
 
 libraryDependencies := Seq(
   "com.typesafe.play" %% "play-akka-http-server" % "2.8.7",

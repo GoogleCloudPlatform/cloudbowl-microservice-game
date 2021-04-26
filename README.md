@@ -10,9 +10,11 @@ Run Locally:
     ```
     ./sbt "runMain apps.dev.KafkaApp"
     ```
+1. Start the sample service
+    ```
+    (cd samples/scala-play; ./sbt run)
+    ```
 1. Start the Battle
-
-    TODO: player backends
     ```
     ./sbt "runMain apps.Battle"
     ```
@@ -20,19 +22,16 @@ Run Locally:
     ```
     ./sbt "runMain apps.dev.KafkaConsumerApp"
     ```
-1. Start the sample service
-    ```
-    cd samples/scala-play
-    ./sbt run
-    ```
 1. Start the apps.dev Kafka event producer
     ```
     ./sbt "runMain apps.dev.KafkaProducerApp"
     ```
     You can send commands like
     ```
+    ARENA/create
+    ARENA/playerjoin
+    ARENA/playerleave/ID
     ARENA/viewerjoin
-    ARENA/playersrefresh
     ARENA/scoresreset
     ```
 1. Start the Viewer web app
@@ -48,25 +47,6 @@ Pause the Arena refresh:
 ```
 document.body.dataset.paused = true;
 ```
-
-
-Testing:
-
-For GitHub Player backend:
-
-1. Create a GitHub App with perm *Contents - Read-Only*
-1. Generate a private key
-1. `export GITHUB_APP_PRIVATE_KEY=$(cat ~/somewhere/your-integration.2017-02-07.private-key.pem)`
-1. `export GITHUB_APP_ID=YOUR_NUMERIC_GITHUB_APP_ID`
-1. `export GITHUB_ORGREPO=cloudbowl/arenas`
-1. Run the tests:
-    ```
-    ./sbt test
-    ```
-
-For Google Sheets Player backend:
-
-1. TODO
 
 
 ## Run on Google Cloud
@@ -108,9 +88,6 @@ For Google Sheets Player backend:
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')
     echo $IP_ADDRESS
     ```
-1. Create a GitHub App, with a push event WebHook to your web app (i.e. https://IP_ADDRESS.nip.io/playersrefresh) and with a preshared key you have made up.  For permissions, select Contents *Read-only* and for Events select *Push*.
-1. Generate a Private Key for the GitHub App
-1. Install the GitHub App on the repo that will hold the players
 1. Create a ConfigMap named `cloudbowl-config`:
     ```
     cat <<EOF | kubectl apply -f -
@@ -119,16 +96,12 @@ For Google Sheets Player backend:
     metadata:
       name: cloudbowl-config
     data:
-      GITHUB_ORGREPO: # Your GitHub Org/Repo
-      GITHUB_APP_ID: # Your GitHub App ID
-      GITHUB_PSK: # Your GitHub WebHook's preshared key
       WEBJARS_USE_CDN: 'true'
       APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
+      ADMIN_PASSWORD: # Used for creating / updating arenas
     EOF
-
-    kubectl create configmap cloudbowl-config-github-app --from-file=GITHUB_APP_PRIVATE_KEY=FULLPATH_TO_YOUR_GITHUB_APP.private-key.pem
     ```
-1. Setup Cloud Build with a trigger on master, excluding `samples/**`, and with substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
+1. Setup Cloud Build with a trigger on master, excluding `samples/**`, with Configuration Type set to *Cloud Build configuration file*, and substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.
 1. Once the service is deployed, setup the domain name:
     ```
     export IP_ADDRESS=$(kubectl get svc istio-ingress -n gke-system -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')

@@ -50,6 +50,24 @@ body {
     font-size: 32pt;
 }
 
+#links {
+    float: right;
+    margin-top: 20px;
+}
+
+#links button {
+    font-size: 14px;
+}
+
+#instructions {
+    display: inline-block;
+    visibility: hidden;
+}
+
+#join {
+    display: inline-block;
+}
+
 /* make sure the notch doesn't cover the title */
 @media only screen and (orientation: landscape) {
     #title {

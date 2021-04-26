@@ -23,7 +23,7 @@ import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.{Config, ConfigValueFactory}
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 
@@ -70,10 +70,11 @@ object Kafka {
     Producer.plainSink(producerSettings(keySerializer, valueSerializer))
   }
 
-  def source[K, V](groupId: String, topic: String)(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], Control] = {
+  def source[K, V](groupId: String, topic: String, resetConfig: String = "latest")(implicit actorSystem: ActorSystem, keyDeserializer: Deserializer[K], valueDeserializer: Deserializer[V]): Source[ConsumerRecord[K, V], Control] = {
     val subscription = Subscriptions.topics(topic)
-    val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId) //.withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
-    Consumer.plainPartitionedSource(settings, subscription).flatMapMerge(Int.MaxValue, _._2)
+    val settings = consumerSettings(keyDeserializer, valueDeserializer).withGroupId(groupId).withProperties(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetConfig)
+    //Consumer.plainPartitionedSource(settings, subscription).flatMapMerge(Int.MaxValue, _._2)
+    Consumer.plainSource(settings, subscription)
   }
 
 }

@@ -1,13 +1,13 @@
 # Routes
+GET         /favicon.ico                                controllers.Default.notFound
 GET         /:arena                                     controllers.Main.index(arena)
-GET         /updates/:arena                             controllers.Main.updates(arena, uuid: java.util.UUID)
+GET         /:arena/join                                controllers.Main.join(arena)
+GET         /:arena/updates                             controllers.Main.updates(arena, uuid: java.util.UUID)
+GET         /:arena/admin                               controllers.Main.admin(arena)
 
-POST        /scoresreset/:arena                         controllers.Main.scoresReset(arena)
-
-+ nocsrf
-POST        /playersrefresh/:arena                      controllers.Main.playersRefresh(arena)
-+ nocsrf
-POST        /playersrefresh                             controllers.Main.gitHubPlayersRefresh()
+POST        /:arena/scoresreset                         controllers.Main.scoresReset(arena)
+POST        /:arena/join                                controllers.Main.joinValidate(arena)
+POST        /:arena/admin                               controllers.Main.adminValidate(arena)
 
 GET         /assets/*file                               controllers.Assets.versioned(path="/public", file: Asset)
 ->          /webjars                                    webjars.Routes

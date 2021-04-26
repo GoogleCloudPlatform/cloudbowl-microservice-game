@@ -16,23 +16,25 @@
 
 package models
 
-import java.net.URL
-
+import models.Arena.ArenaState
 import models.Direction.Direction
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsString, Writes, __}
 
+import java.net.URL
 import scala.concurrent.duration.FiniteDuration
 
 object Events {
 
-  case object PlayersRefresh
+  sealed trait PlayerUpdate
+  case class PlayerJoin(player: Player) extends PlayerUpdate
+  case class PlayerLeave(service: Player.Service) extends PlayerUpdate
+
   case object ScoresReset
 
-  case class ArenaDimsAndPlayers(name: Arena.Name, emojiCode: Arena.EmojiCode, dims: Arena.Dimensions, playerStates: Map[Player, PlayerState], canResetIn: FiniteDuration)
-  case class ArenaUpdate(path: Arena.Path, arenaDimsAndPlayers: ArenaDimsAndPlayers)
+  case class ArenaUpdate(arenaState: ArenaState, canResetIn: FiniteDuration)
 
-  implicit val urlWrites = Writes[URL](url => JsString(url.toString))
+  implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
 
   implicit val playerPlayerStateWrites: Writes[(Player, PlayerState)] = (
     (__ \ "name").write[String] ~
@@ -49,25 +51,23 @@ object Events {
     (player.name, player.pic, playerState.x, playerState.y, playerState.direction, playerState.wasHit, playerState.score, playerState.responseTime.map(_.toMillis))
   }
 
-  implicit val arenaDimsAndPlayersWrites = (
+  implicit val arenaUpdateWrites: Writes[ArenaUpdate] = (
     (__ \ "name").write[String] ~
     (__ \ "emoji_code").write[String] ~
+    (__ \ "instructions").writeNullable[URL] ~
     (__ \ "width").write[Int] ~
     (__ \ "height").write[Int] ~
     (__ \ "can_reset_in_seconds").write[Long] ~
-    (__ \ "players").write[Map[String, (Player, PlayerState)]]
-  ) { arenaDimsAndPlayersWrites: ArenaDimsAndPlayers =>
-    val playerPlayerStates = arenaDimsAndPlayersWrites.playerStates.map { case (player, playerState) =>
-      (player.service, (player, playerState))
-    }
-
+    (__ \ "players").write[Map[Player, PlayerState]]
+  ) { arenaUpdate: ArenaUpdate =>
     (
-      arenaDimsAndPlayersWrites.name,
-      arenaDimsAndPlayersWrites.emojiCode,
-      arenaDimsAndPlayersWrites.dims.width,
-      arenaDimsAndPlayersWrites.dims.height,
-      arenaDimsAndPlayersWrites.canResetIn.toSeconds,
-      playerPlayerStates,
+      arenaUpdate.arenaState.config.name,
+      arenaUpdate.arenaState.config.emojiCode,
+      arenaUpdate.arenaState.config.instructions,
+      arenaUpdate.arenaState.dims.width,
+      arenaUpdate.arenaState.dims.height,
+      arenaUpdate.canResetIn.toSeconds,
+      arenaUpdate.arenaState.state,
     )
   }
 
