@@ -61,89 +61,83 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
     .buffer(2, OverflowStrategy.dropTail)
     .toMat(BroadcastHub.sink(bufferSize = 2))(Keep.right).run()
 
+  private val avatarSessionKey = "avatar"
+
+  def home(maybeAvatar: Option[String]) = Action { implicit request =>
+    maybeAvatar.filter(_.nonEmpty).fold {
+      Ok(views.html.home(request))
+    } { avatar =>
+      Redirect(routes.Main.home(None)).addingToSession(avatarSessionKey -> avatar)
+    }
+  }
+
   def index(arena: Arena.Path) = Action { implicit request =>
     Ok(views.html.index(arena))
   }
 
   def join(arena: Arena.Path) = Action { implicit request =>
-    Ok(joinTemplate(arena, None, None, None, None, None))
+    Ok(joinTemplate(arena, None, None, None))
   }
 
   def joinValidate(arena: Arena.Path) = Action.async(parse.formUrlEncoded) { implicit request =>
-    val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
-    val maybeUrl = request.body.get("url").flatMap(_.headOption).filter(_.nonEmpty)
-    val maybeGithubUsername = request.body.get("githubUsername").flatMap(_.headOption).filter(_.nonEmpty)
-    val maybeAction = request.body.get("action").flatMap(_.headOption)
-
-    val urlInvalidFuture = maybeUrl.fold[Future[Option[String]]](Future.successful(Some("url is empty"))) { url =>
-      if (!url.startsWith("https://")) {
-        Future.successful(Some("url must use https"))
+    request.session.get(avatarSessionKey).fold {
+      Future.successful {
+        BadRequest("Your avatar was not set by Adventure. Please go back into Adventure, visit the Cloud Dome, and re-enter the Rainbow Rumpus.")
       }
-      else {
-        def host(s: String): String = {
-          s.stripPrefix("http://").stripPrefix("https://").takeWhile(_ != '/').takeWhile(_ != ':').toLowerCase
-        }
+    } { avatar =>
+      val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
+      val maybeUrl = request.body.get("url").flatMap(_.headOption).filter(_.nonEmpty)
+      val maybeAction = request.body.get("action").flatMap(_.headOption)
 
-        query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].flatMap { players =>
-          val playerExists = players.exists { player =>
-            host(player.service) == host(url)
-          }
-
-          if (!playerExists) {
-            val player = Player(url, "test", new URL(s"$avatarBaseUrl/285/test.png"))
-            val playerState = PlayerState(0, 0, Direction.N, false, 0, Set.empty, None)
-            val arenaState = ArenaState(ArenaConfig("test", "test", "2728"), Map(player -> playerState), ZonedDateTime.now())
-            val json = Arena.playerJson(arenaState, player)
-            wsClient.url(url).post(json).map { response =>
-              if (response.status != OK) {
-                Some("Microservice did not return status 200")
-              }
-              else if ((response.body != "F") && (response.body != "T") && (response.body != "L") && (response.body != "R")) {
-                Some("Microservice did not return a valid response")
-              }
-              else {
-                None
-              }
-            }
-          }
-          else {
-            Future.successful(Some("Player with that hostname already exists in the arena"))
-          }
-        }
-      }
-    }
-
-    // todo: prevent duplicate github users
-    val githubUserInvalidFuture = maybeGithubUsername.fold[Future[Option[String]]](Future.successful(None)) { githubUsername =>
-      wsClient.url(s"https://github.com/$githubUsername.png").get().map { response =>
-        if (response.status == OK) {
-          None
+      val urlInvalidFuture = maybeUrl.fold[Future[Option[String]]](Future.successful(Some("url is empty"))) { url =>
+        if (!url.startsWith("https://")) {
+          Future.successful(Some("url must use https"))
         }
         else {
-          Some("GitHub username was not found")
-        }
-      }
-    }
-
-    for {
-      urlInvalid <- urlInvalidFuture
-      githubUserInvalid <- githubUserInvalidFuture
-    } yield {
-      (maybeAction, maybeName, maybeUrl, urlInvalid, githubUserInvalid) match {
-        case (Some("add"), Some(name), Some(service), None, None) =>
-          // send
-          val pic = maybeGithubUsername.map { gitHubUser =>
-            s"https://github.com/$gitHubUser.png"
-          }.getOrElse {
-            s"$avatarBaseUrl/285/$name.png"
+          def host(s: String): String = {
+            s.stripPrefix("http://").stripPrefix("https://").takeWhile(_ != '/').takeWhile(_ != ':').toLowerCase
           }
 
-          val player = Player(service, name, new URL(pic))
-          val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
-          Source.single(record).to(playerUpdateSink).run()
-          Redirect(controllers.routes.Main.index(arena))
-        case _ =>
-          Ok(joinTemplate(arena, maybeName, maybeUrl, urlInvalid, maybeGithubUsername, githubUserInvalid))
+          query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].flatMap { players =>
+            val playerExists = players.exists { player =>
+              host(player.service) == host(url)
+            }
+
+            if (!playerExists) {
+              val player = Player(url, "test", new URL(s"$avatarBaseUrl/285/test.png"))
+              val playerState = PlayerState(0, 0, Direction.N, false, 0, Set.empty, None)
+              val arenaState = ArenaState(ArenaConfig("test", "test", "2728"), Map(player -> playerState), ZonedDateTime.now())
+              val json = Arena.playerJson(arenaState, player)
+              wsClient.url(url).post(json).map { response =>
+                if (response.status != OK) {
+                  Some("Microservice did not return status 200")
+                }
+                else if ((response.body != "F") && (response.body != "T") && (response.body != "L") && (response.body != "R")) {
+                  Some("Microservice did not return a valid response")
+                }
+                else {
+                  None
+                }
+              }
+            }
+            else {
+              Future.successful(Some("Player with that hostname already exists in the arena"))
+            }
+          }
+        }
+      }
+
+      urlInvalidFuture.map { urlInvalid =>
+        (maybeAction, maybeName, maybeUrl, urlInvalid) match {
+          case (Some("add"), Some(name), Some(service), None) =>
+            val pic = s"$avatarBaseUrl/$avatar.png"
+            val player = Player(service, name, new URL(pic))
+            val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
+            Source.single(record).to(playerUpdateSink).run()
+            Redirect(controllers.routes.Main.index(arena))
+          case _ =>
+            Ok(joinTemplate(arena, maybeName, maybeUrl, urlInvalid))
+        }
       }
     }
   }

@@ -49,8 +49,8 @@ scalacOptions ++= Seq(
   "-Ywarn-dead-code",
   "-Ywarn-extra-implicit",
   "-Ywarn-numeric-widen",
-  "-Ywarn-unused:implicits",
-  "-Ywarn-unused:locals",
+  //"-Ywarn-unused:implicits",
+  //"-Ywarn-unused:locals",
   //"-Ywarn-unused:params", // disabled because Play routes needs a param to match a path
   "-Ywarn-unused:patvars",
   //"-Ywarn-unused:privates", // disabled because Play routes has an unused private val

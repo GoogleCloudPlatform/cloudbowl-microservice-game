@@ -20,16 +20,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const tag of document.getElementsByTagName('button')) {
         tag.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'action';
-            input.value = tag.value;
-            tag.form.appendChild(input);
-            tag.disabled = true;
-            tag.form.submit();
+            if (tag.form.reportValidity()) {
+                // add a hidden field indicating which button the user pressed
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'action';
+                input.value = tag.value;
+                tag.form.appendChild(input);
+
+                // disable the button since processing can take a bit
+                tag.disabled = true;
+
+                tag.form.submit();
+            }
         });
     }
 
 });
-
 

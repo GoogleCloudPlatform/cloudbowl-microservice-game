@@ -15,7 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, name: Option[String], url: Option[String], urlInvalid: Option[String], githubUser: Option[String], githubUserInvalid: Option[String])(implicit request: RequestHeader)
+@(arena: Arena.Path, name: Option[String], url: Option[String], urlInvalid: Option[String])(implicit request: RequestHeader)
 
 @import helper._
 
@@ -68,25 +68,8 @@
                                     }
                                 }
                             </div>
-                            <div class="form-group">
-                                <label for="githubUsername">GitHub Username (optional)</label>
 
-                                @githubUser.fold {
-                                    <input class="form-control" id="githubUsername" name="githubUsername">
-                                } { sGithubUser =>
-                                    @githubUserInvalid.fold {
-                                        <input class="form-control is-valid" id="githubUsername" name="githubUsername" value="@sGithubUser">
-                                        <img src="https://github.com/@{sGithubUser}.png" width="64" style="margin-top: 10px;">
-                                    } { message =>
-                                        <input class="form-control is-invalid" id="githubUsername" name="githubUsername" value="@sGithubUser">
-                                        <div class="invalid-feedback">
-                                            @message
-                                        </div>
-                                    }
-                                }
-                            </div>
-
-                            @if(name.isDefined && url.isDefined && urlInvalid.isEmpty && githubUserInvalid.isEmpty) {
+                            @if(name.isDefined && url.isDefined && urlInvalid.isEmpty) {
                                 <button class="btn btn-primary" type="submit" name="action" value="verify">Reverify</button>
                                 <button class="btn btn-success" type="submit" name="action" value="add">Add Microservice</button>
                             } else {
