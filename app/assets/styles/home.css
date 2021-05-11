@@ -18,20 +18,70 @@ body {
     font-family: monospace;
 }
 
+h1 {
+    font-size: 48px;
+    display: flex;
+    justify-content: center;
+}
+
+blockquote {
+    margin: auto;
+    padding: 5px;
+    max-width: 800px;
+    background-color: #dddddd;
+    font-style: italic;
+}
+
 .container {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
 }
 
+.codelab {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.codelab > button {
+    font-size: 24px;
+    background-color: #ffffff;
+    transition: background-color 1s;
+}
+
 .arena-preview {
-    height: 400px;
+    height: 350px;
     width: 250px;
-    border: 1px;
+    border: 1px #000000 solid;
+    margin: 5px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
 }
 
 .arena-preview > form {
     display: inline-block;
+}
+
+.arena-preview > .header {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.arena-preview > .arena-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: auto;
+}
+
+.arena-preview > .arena-actions > form {
+    margin: 5px;
+}
+
+.score > p {
+
 }
 
 .score {

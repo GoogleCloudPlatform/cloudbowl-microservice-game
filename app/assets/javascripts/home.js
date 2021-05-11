@@ -16,12 +16,24 @@
 
 const println = console.log;
 
-const maxPlayersPerRoom = 2;
+const maxPlayersPerRoom = 200;
 
 document.addEventListener('DOMContentLoaded', () => {
   const body = document.body;
   const arenas = document.getElementById('arenas');
+  const codelabButton = document.getElementById('codelabButton');
   const maybeSummaryUrl = body.dataset.summaryurl;
+
+  window.setInterval(() => {
+    const currentColor = codelabButton.style.backgroundColor;
+    const c = Array.from(arenas.children).findIndex( (child) => child.style.backgroundColor === currentColor);
+    if ((c === -1) || (c === arenas.children.length - 1)) {
+      codelabButton.style.backgroundColor = arenas.children[0].style.backgroundColor;
+    }
+    else {
+      codelabButton.style.backgroundColor = arenas.children[c + 1].style.backgroundColor;
+    }
+  }, 1000);
 
   if (!!window.EventSource && !!maybeSummaryUrl) {
     function eventSource() {
@@ -56,6 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
           if ((prevChild == null) || (isFull(prevChild))) {
             const maybeData = data[path];
             if (maybeData !== undefined) {
+              if (maybeData.numPlayers > 0) {
+                document.getElementById(`${path}-topPlayersHeader`).innerText = 'Top Players:';
+              }
+              else {
+                document.getElementById(`${path}-topPlayersHeader`).innerText = 'No Players Yet';
+              }
+
               if (document.getElementById(`${path}-name`).innerText !== maybeData.name) {
                 document.getElementById(`${path}-name`).innerText = maybeData.name;
               }
@@ -94,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 topPlayers.appendChild(playerDiv);
               });
 
-              thisChild.style.display = 'block';
+              thisChild.style.display = 'flex';
             }
           }
         }

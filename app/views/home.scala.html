@@ -27,22 +27,30 @@
     <script src="@routes.Assets.versioned("javascripts/home.js")"></script>
 </head>
 <body data-summaryurl="@controllers.routes.Main.summary(java.util.UUID.randomUUID)">
-    <h1>Rainbow Rumpus</h1>
+    <h1>
+        <img src="https://noto-website-2.storage.googleapis.com/emoji/emoji_u1f308.png"/>
+        Rainbow Rumpus
+    </h1>
 
     <blockquote>
         Get to know Google Cloud by deploying a microservice on Cloud Run and joining a virtual rumpus where your microservice will throw "rainbows" at other microservices, competing to win!  You will get hands on deploying Kotlin, Java, Go, Python, or Node.js microservices, learning about containers and Cloud Run along the way.  See if you can score more points than other Adventurers by continually improving your algorithm.
     </blockquote>
 
-    <form action="https://codelabs.developers.google.com/codelabs/rainbowrumpus">
-        <button>Deploy Your Microservice to Join the Rumpus!</button>
+    <form class="codelab" action="https://codelabs.developers.google.com/codelabs/rainbowrumpus">
+        <button id="codelabButton">Deploy Your Microservice to Join the Rumpus!</button>
     </form>
 
     @arena(path: String, color: String) = {
         <div id="@path" class="arena-preview" style="background-color: @color; display: none;">
-            <span id="@path-name"></span> (<span id="@path-numPlayers"></span> players) <span id="@path-full"></span>
+            <div class="header">
+                <span id="@path-name"></span> (<span id="@path-numPlayers"></span> players) <span id="@path-full"></span>
+            </div>
+            <p id="@path-topPlayersHeader"></p>
             <div id="@path-topPlayers"></div>
-            <form action="/@path"><button>Watch</button></form>
-            <form id="@path-join" action="/@path/join"><button>Join</button></form>
+            <div class="arena-actions">
+                <form action="/@path"><button>Watch</button></form>
+                <form id="@path-join" action="/@path/join"><button>Join</button></form>
+            </div>
         </div>
     }
 
