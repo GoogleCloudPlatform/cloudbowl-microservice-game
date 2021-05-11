@@ -33,12 +33,14 @@
         Get to know Google Cloud by deploying a microservice on Cloud Run and joining a virtual rumpus where your microservice will throw "rainbows" at other microservices, competing to win!  You will get hands on deploying Kotlin, Java, Go, Python, or Node.js microservices, learning about containers and Cloud Run along the way.  See if you can score more points than other Adventurers by continually improving your algorithm.
     </blockquote>
 
-    <button>Deploy Your Microservice to Join the Rumpus!</button>
+    <form action="https://codelabs.developers.google.com/codelabs/rainbowrumpus">
+        <button>Deploy Your Microservice to Join the Rumpus!</button>
+    </form>
 
     @arena(path: String, color: String) = {
         <div id="@path" class="arena-preview" style="background-color: @color; display: none;">
             <span id="@path-name"></span> (<span id="@path-numPlayers"></span> players) <span id="@path-full"></span>
-            <ul id="@path-topPlayers"></ul>
+            <div id="@path-topPlayers"></div>
             <form action="/@path"><button>Watch</button></form>
             <form id="@path-join" action="/@path/join"><button>Join</button></form>
         </div>

@@ -33,9 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function isFull(child) {
           const maybeData = data[child.id];
+          const maybeFull = document.getElementById(`${child.id}-full`);
 
           if (maybeData !== undefined) {
             return (maybeData.numPlayers >= maxPlayersPerRoom);
+          }
+          else if (maybeFull !== undefined) {
+            // we may not have data for the previous child so we also check if it is set as full via the UI
+            // todo: maybe use a data element instead
+            return maybeFull.innerText.length;
           }
           else {
             return false;
@@ -67,9 +73,25 @@ document.addEventListener('DOMContentLoaded', () => {
               topPlayers.innerHTML = '';
 
               maybeData.topPlayers.forEach( (player) => {
-                const li = document.createElement('li');
-                li.innerText = `${player.name} - ${player.score}`;
-                topPlayers.appendChild(li);
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('score');
+
+                const pic = document.createElement('img');
+
+                pic.src = player.pic
+                playerDiv.appendChild(pic);
+
+                const name = document.createElement('span');
+                name.classList.add('name');
+                name.innerText = player.name;
+                playerDiv.appendChild(name);
+
+                const score = document.createElement('span');
+                score.classList.add('num');
+                score.innerText = player.score;
+                playerDiv.appendChild(score);
+
+                topPlayers.appendChild(playerDiv);
               });
 
               thisChild.style.display = 'block';

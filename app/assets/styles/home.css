@@ -30,6 +30,35 @@ body {
     border: 1px;
 }
 
-.arena-preview>form {
+.arena-preview > form {
     display: inline-block;
+}
+
+.score {
+    display: flex;
+    padding-bottom: 10px;
+}
+
+.score > img {
+    max-height: 40px;
+    max-width: 40px;
+    padding-right: 10px;
+}
+
+.score > .name {
+    width: 100%;
+    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-right: 10px;
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
+.score > .num {
+    min-width: 35px;
+    max-width: 35px;
+    text-align: right;
+    margin-top: auto;
+    margin-bottom: auto;
 }
