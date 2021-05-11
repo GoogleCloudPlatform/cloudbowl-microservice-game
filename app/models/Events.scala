@@ -19,7 +19,7 @@ package models
 import models.Arena.ArenaState
 import models.Direction.Direction
 import play.api.libs.functional.syntax._
-import play.api.libs.json.{JsString, Writes, __}
+import play.api.libs.json.{JsString, Json, Writes, __}
 
 import java.net.URL
 import scala.concurrent.duration.FiniteDuration
@@ -33,6 +33,18 @@ object Events {
   case object ScoresReset
 
   case class ArenaUpdate(arenaState: ArenaState, canResetIn: FiniteDuration)
+
+  case class PlayerSummary(pic: URL, name: String, score: Int)
+
+  case class Summary(name: String, numPlayers: Int, topPlayers: Seq[PlayerSummary])
+
+  def arenaUpdateToSummary(arenaUpdate: ArenaUpdate): Summary = {
+    val topPlayers = arenaUpdate.arenaState.state.toSeq.sortBy(_._2.score)(Ordering.Int.reverse).take(5).map { case (player, state) =>
+      PlayerSummary(player.pic, player.name, state.score)
+    }
+
+    Summary(arenaUpdate.arenaState.config.name, arenaUpdate.arenaState.state.size, topPlayers)
+  }
 
   implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
 
@@ -70,5 +82,8 @@ object Events {
       arenaUpdate.arenaState.state,
     )
   }
+
+  implicit val playerSummaryWrites: Writes[PlayerSummary] = Json.writes[PlayerSummary]
+  implicit val summaryWrites: Writes[Summary] = Json.writes[Summary]
 
 }

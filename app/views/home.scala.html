@@ -14,6 +14,7 @@
  * limitations under the License.
  *@
 
+@this(webJarsUtil: org.webjars.play.WebJarsUtil)
 @(implicit request: RequestHeader)
 
 <!doctype html>
@@ -21,8 +22,42 @@
 <head>
     <meta charset="utf-8">
     <title>Rainbow Rumpus</title>
+
+    <link rel="stylesheet" href="@routes.Assets.versioned("styles/home.css")">
+    <script src="@routes.Assets.versioned("javascripts/home.js")"></script>
 </head>
-<body>
-    hello, world
+<body data-summaryurl="@controllers.routes.Main.summary(java.util.UUID.randomUUID)">
+    <h1>Rainbow Rumpus</h1>
+
+    <blockquote>
+        Get to know Google Cloud by deploying a microservice on Cloud Run and joining a virtual rumpus where your microservice will throw "rainbows" at other microservices, competing to win!  You will get hands on deploying Kotlin, Java, Go, Python, or Node.js microservices, learning about containers and Cloud Run along the way.  See if you can score more points than other Adventurers by continually improving your algorithm.
+    </blockquote>
+
+    <button>Deploy Your Microservice to Join the Rumpus!</button>
+
+    @arena(path: String, color: String) = {
+        <div id="@path" class="arena-preview" style="background-color: @color; display: none;">
+            <span id="@path-name"></span> (<span id="@path-numPlayers"></span> players) <span id="@path-full"></span>
+            <ul id="@path-topPlayers"></ul>
+            <form action="/@path"><button>Watch</button></form>
+            <form id="@path-join" action="/@path/join"><button>Join</button></form>
+        </div>
+    }
+
+    <div id="arenas" class="container">
+        @arena("red", "#ff0000")
+        @arena("orange", "#ffa500")
+        @arena("yellow", "#ffff00")
+        @arena("chartreuse", "#7fff00")
+        @arena("green", "#00ff00")
+        @arena("cyan", "#00ffff")
+        @arena("teal", "#008080")
+        @arena("blue", "#0000ff")
+        @arena("indigo", "#4b0082")
+        @arena("violet", "#ee82ee")
+        @arena("magenta", "#ff00ff")
+        @arena("rose", "#ff007f")
+    </div>
+
 </body>
 </html>

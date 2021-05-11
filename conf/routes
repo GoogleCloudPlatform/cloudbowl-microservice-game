@@ -1,6 +1,7 @@
 # Routes
 GET         /favicon.ico                                controllers.Default.notFound
 GET         /                                           controllers.Main.home(avatar: Option[String])
+GET         /summary                                    controllers.Main.summary(uuid: java.util.UUID)
 GET         /:arena                                     controllers.Main.index(arena)
 GET         /:arena/join                                controllers.Main.join(arena)
 GET         /:arena/updates                             controllers.Main.updates(arena, uuid: java.util.UUID)

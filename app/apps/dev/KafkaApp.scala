@@ -116,7 +116,7 @@ object KafkaProducerApp extends App {
         case Array(arena, "playerjoin") =>
           val name = Random.alphanumeric.take(6).mkString
           val service = s"http://localhost:8080/$name"
-          val img = new URL(s"$avatarBaseUrl/285/$name.png")
+          val img = new URL(s"$avatarBaseUrl/e59ec286f11358723723dd223fa8e412.png")
           val player = Player(service, name, img)
           send(Topics.playerUpdate, arena, PlayerJoin(player))
 

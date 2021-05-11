@@ -16,7 +16,8 @@
 
 package controllers
 
-import akka.actor.{Actor, ActorSystem, Kill, Props}
+import akka.NotUsed
+import akka.actor.{Actor, ActorRef, ActorSystem, Kill, Props}
 import akka.pattern.ask
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{BroadcastHub, Keep, Sink, Source}
@@ -42,7 +43,8 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 // todo: possible race condition - for join & admin, players & arena config may not have been received when the form is submitted
-class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate: views.html.admin, wsClient: WSClient, configuration: Configuration)
+class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, configuration: Configuration)
+                    (joinTemplate: views.html.join, adminTemplate: views.html.admin, homeTemplate: views.html.home)
                     (implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
   private val avatarBaseUrl = configuration.get[String]("avatar.base.url")
@@ -63,9 +65,11 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
 
   private val avatarSessionKey = "avatar"
 
+  private val avatarSessionNotFound = "Your avatar was not set by Adventure. Please go back into Adventure, visit the Cloud Dome, and re-enter the Rainbow Rumpus."
+
   def home(maybeAvatar: Option[String]) = Action { implicit request =>
     maybeAvatar.filter(_.nonEmpty).fold {
-      Ok(views.html.home(request))
+      Ok(homeTemplate(request))
     } { avatar =>
       Redirect(routes.Main.home(None)).addingToSession(avatarSessionKey -> avatar)
     }
@@ -76,13 +80,17 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
   }
 
   def join(arena: Arena.Path) = Action { implicit request =>
-    Ok(joinTemplate(arena, None, None, None))
+    request.session.get(avatarSessionKey).fold {
+      BadRequest(avatarSessionNotFound)
+    } { _ =>
+      Ok(joinTemplate(arena, None, None, None))
+    }
   }
 
   def joinValidate(arena: Arena.Path) = Action.async(parse.formUrlEncoded) { implicit request =>
     request.session.get(avatarSessionKey).fold {
       Future.successful {
-        BadRequest("Your avatar was not set by Adventure. Please go back into Adventure, visit the Cloud Dome, and re-enter the Rainbow Rumpus.")
+        BadRequest(avatarSessionNotFound)
       }
     } { avatar =>
       val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
@@ -143,8 +151,6 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
   }
 
   def updates(arena: Arena.Path, uuid: UUID) = Action {
-    // todo: one global source and broadcast to all viewers
-
     val ping = new ProducerRecord(Arena.KafkaConfig.Topics.viewerPing, arena, uuid)
 
     // wait one second to start otherwise there seems to be no demand yet,
@@ -164,6 +170,13 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
     }
 
     Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
+  }
+
+  def summary(uuid: UUID) = Action.async {
+    summaries.source(uuid).map { summaries =>
+      val source = summaries.map(Json.toJson[Map[Arena.Path, Summary]]).via(EventSource.flow[JsValue])
+      Ok.chunked(source).as(ContentTypes.EVENT_STREAM)
+    }
   }
 
   def scoresReset(arena: Arena.Path) = Action.async {
@@ -224,7 +237,7 @@ class Main @Inject()(query: Query, joinTemplate: views.html.join, adminTemplate:
 @Singleton
 class Query @Inject()(implicit actorSystem: ActorSystem) {
 
-  val groupId = UUID.randomUUID().toString
+  private val groupId = UUID.randomUUID().toString
 
   class PlayerUpdateActor extends Actor {
     val allPlayers = scala.collection.mutable.Map.empty[Arena.Path, Set[Player]]
@@ -237,9 +250,8 @@ class Query @Inject()(implicit actorSystem: ActorSystem) {
     }
   }
 
-  val playerUpdateActorRef = actorSystem.actorOf(Props(new PlayerUpdateActor))
-  val playerUpdate = apps.Sources.playerUpdate(groupId).to(Sink.actorRef(playerUpdateActorRef, Kill, _ => Kill)).run()
-
+  val playerUpdateActorRef: ActorRef = actorSystem.actorOf(Props(new PlayerUpdateActor))
+  private val playerUpdate = apps.Sources.playerUpdate(groupId).to(Sink.actorRef(playerUpdateActorRef, Kill, _ => Kill)).run()
 
   class ArenaConfigActor extends Actor {
     val arenaConfigs = scala.collection.mutable.Map.empty[Arena.Path, ArenaConfig]
@@ -247,17 +259,58 @@ class Query @Inject()(implicit actorSystem: ActorSystem) {
     override def receive = {
       case PathedArenaConfig(path, arenaConfig) =>
         arenaConfigs.update(path, arenaConfig)
+      case Query.ArenaConfigs =>
+        sender() ! arenaConfigs.toMap
       case path: Arena.Path =>
         sender() ! arenaConfigs.get(path)
     }
   }
 
-  val arenaConfigActorRef = actorSystem.actorOf(Props(new ArenaConfigActor))
-  val arenaConfig = apps.Sources.arenaConfig(groupId).to(Sink.actorRef(arenaConfigActorRef, Kill, _ => Kill)).run()
+  val arenaConfigActorRef: ActorRef = actorSystem.actorOf(Props(new ArenaConfigActor))
+  private val arenaConfig = apps.Sources.arenaConfig(groupId).to(Sink.actorRef(arenaConfigActorRef, Kill, _ => Kill)).run()
+
 }
+
+object Query {
+  case object ArenaConfigs
+}
+
+@Singleton
+class Summaries @Inject()(query: Query)(implicit actorSystem: ActorSystem) {
+
+  private implicit val ec = ExecutionContext.global
+
+  private val groupId = UUID.randomUUID().toString
+
+  private val viewerEventSink = Arena.KafkaConfig.SinksAndSources.viewerEventSink
+
+  val _source: Source[Map[Arena.Path, Summary], NotUsed] = {
+    Arena.KafkaConfig.SinksAndSources.arenaUpdateSource(groupId).conflateWithSeed { record =>
+      Map(record.key() -> arenaUpdateToSummary(record.value()))
+    } { case (summaries, record) =>
+      summaries.updated(record.key(), arenaUpdateToSummary(record.value()))
+    }.throttle(1, 1.second).buffer(2, OverflowStrategy.dropTail).toMat(BroadcastHub.sink(bufferSize = 2))(Keep.right).run()
+  }
+
+  // sends a viewer ping to all the arenas so we get an ArenaUpdate
+  def source(uuid: UUID): Future[Source[Map[Arena.Path, Summary], NotUsed]] = {
+    query.arenaConfigActorRef.ask(Query.ArenaConfigs)(Timeout(10.seconds)).mapTo[Map[Arena.Path, ArenaConfig]].map { arenaConfigs =>
+      val pings = arenaConfigs.keySet.map { path =>
+        new ProducerRecord(Arena.KafkaConfig.Topics.viewerPing, path, uuid)
+      }
+
+      Source(pings).to(viewerEventSink).run()
+
+      _source
+    }
+  }
+
+}
+
 
 class StartModule extends AbstractModule {
   override def configure() = {
     bind(classOf[Query]).asEagerSingleton()
+    bind(classOf[Summaries]).asEagerSingleton()
   }
 }
