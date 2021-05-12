@@ -132,7 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
               // arena setup
               clear(arena);
 
+              // workaround for small avatars
+              arena.style.maxWidth = `${data.width * 65}px`;
               arena.style.gridTemplateColumns = `repeat(${data.width}, 1fr)`;
+              // workaround for small avatars
+              arena.style.maxHeight = `${data.height * 65}px`;
               arena.style.gridTemplateRows = `repeat(${data.height}, 1fr)`;
 
               for (let y = 0; y < data.height; y++) {
