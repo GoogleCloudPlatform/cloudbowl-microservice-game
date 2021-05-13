@@ -97,9 +97,11 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       val maybeUrl = request.body.get("url").flatMap(_.headOption).filter(_.nonEmpty)
       val maybeAction = request.body.get("action").flatMap(_.headOption)
 
-      val urlInvalidFuture = maybeUrl.fold[Future[Option[String]]](Future.successful(Some("url is empty"))) { url =>
+      val pic = new URL(s"$avatarBaseUrl/$avatar.png")
+
+      val urlInvalidFuture = maybeUrl.fold[Future[Either[String, Option[Player]]]](Future.successful(Left("url is empty"))) { url =>
         if (!url.startsWith("https://")) {
-          Future.successful(Some("url must use https"))
+          Future.successful(Left("url must use https"))
         }
         else {
           def host(s: String): String = {
@@ -107,29 +109,35 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
           }
 
           query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].flatMap { players =>
-            val playerExists = players.exists { player =>
+            val serviceExists = players.exists { player =>
               host(player.service) == host(url)
             }
 
-            if (!playerExists) {
+            val maybePlayer = players.find { player =>
+              // comparing URLs is based on DNS so we instead compare strings
+              player.pic.toString == pic.toString
+            }
+
+            // validate service
+            if (!serviceExists) {
               val player = Player(url, "test", new URL(s"$avatarBaseUrl/285/test.png"))
               val playerState = PlayerState(0, 0, Direction.N, false, 0, Set.empty, None)
               val arenaState = ArenaState(ArenaConfig("test", "test", "2728"), Map(player -> playerState), ZonedDateTime.now())
               val json = Arena.playerJson(arenaState, player)
               wsClient.url(url).post(json).map { response =>
                 if (response.status != OK) {
-                  Some("Microservice did not return status 200")
+                  Left("Microservice did not return status 200")
                 }
                 else if ((response.body != "F") && (response.body != "T") && (response.body != "L") && (response.body != "R")) {
-                  Some("Microservice did not return a valid response")
+                  Left("Microservice did not return a valid response")
                 }
                 else {
-                  None
+                  Right(maybePlayer)
                 }
               }
             }
             else {
-              Future.successful(Some("Player with that hostname already exists in the arena"))
+              Future.successful(Left("Player with that hostname already exists in the arena"))
             }
           }
         }
@@ -137,14 +145,18 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
 
       urlInvalidFuture.map { urlInvalid =>
         (maybeAction, maybeName, maybeUrl, urlInvalid) match {
-          case (Some("add"), Some(name), Some(service), None) =>
-            val pic = s"$avatarBaseUrl/$avatar.png"
-            val player = Player(service, name, new URL(pic))
+          case (Some("add"), Some(name), Some(service), Right(maybePlayer)) =>
+            maybePlayer.foreach { existingPlayer =>
+              val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerLeave(existingPlayer.service))
+              Source.single(record).to(playerUpdateSink).run()
+            }
+
+            val player = Player(service, name, pic)
             val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
             Source.single(record).to(playerUpdateSink).run()
             Redirect(controllers.routes.Main.index(arena))
           case _ =>
-            Ok(joinTemplate(arena, maybeName, maybeUrl, urlInvalid))
+            Ok(joinTemplate(arena, maybeName, maybeUrl, urlInvalid.left.toOption))
         }
       }
     }
