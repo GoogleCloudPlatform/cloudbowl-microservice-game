@@ -26,6 +26,7 @@ import play.api.libs.ws.WSClient
 import play.api.libs.ws.ahc.AhcWSClient
 import play.api.{Configuration, Environment}
 
+import java.util.UUID
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, TimeoutException}
 
@@ -40,12 +41,12 @@ object Battle extends App {
   private implicit val config: Configuration = play.api.Configuration.load(Environment.simple())
 
   val groupId = "battle"
+  val instanceId = UUID.randomUUID().toString
 
   val arenaUpdateSink = KafkaConfig.SinksAndSources.arenaUpdateSink
 
+  // pings are sharded across consumers
   val viewerEventsSource = KafkaConfig.SinksAndSources.viewerPingSource(groupId).map(_.key())
-
-  val scoresResetSource = KafkaConfig.SinksAndSources.scoresResetSource(groupId)
 
   def arenaUpdateToProducerRecord(arenaUpdate: ArenaUpdate): ProducerRecord[Arena.Path, ArenaUpdate] = {
     new ProducerRecord(KafkaConfig.Topics.arenaUpdate, arenaUpdate.arenaState.config.path, arenaUpdate)
@@ -80,17 +81,11 @@ object Battle extends App {
     .to(sink)
     .run()
 
-
-  val playerUpdate = Sources.playerUpdate(groupId).to(sink).run()
-
-  val arenaConfig = Sources.arenaConfig(groupId).to(sink).run()
-
-  val scoresReset = scoresResetSource
-    .map { record =>
-      PathedScoresReset(record.key())
-    }
-    .to(sink)
-    .run()
+  // All (scoreReset, playerUpdate, arenaConfig) events are sent to all consumers since we don't have a good way to
+  // subscribe to only the events for the arena this consumer instance is handling
+  KafkaConfig.SinksAndSources.scoresResetSource(instanceId).map(r => PathedScoresReset(r.key())).to(sink).run()
+  Sources.playerUpdate(instanceId).to(sink).run()
+  Sources.arenaConfig(instanceId).to(sink).run()
 
   actorSystem.registerOnTermination {
     wsClient.close()
