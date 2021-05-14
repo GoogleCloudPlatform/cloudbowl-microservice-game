@@ -37,7 +37,7 @@
     </blockquote>
 
     <form class="codelab" action="https://codelabs.developers.google.com/codelabs/rainbowrumpus">
-        <button id="codelabButton">Deploy Your Microservice to Join the Rumpus!</button>
+        <button id="codelabButton" formtarget="_blank">Deploy Your Microservice to Join the Rumpus!</button>
     </form>
 
     @arena(path: String, color: String) = {
@@ -48,8 +48,8 @@
             <p id="@path-topPlayersHeader"></p>
             <div id="@path-topPlayers"></div>
             <div class="arena-actions">
-                <form action="/@path"><button>Watch</button></form>
-                <form id="@path-join" action="/@path/join"><button>Join</button></form>
+                <form action="/@path"><button formtarget="_blank">Watch</button></form>
+                <form id="@path-join" action="/@path/join"><button formtarget="_blank">Join</button></form>
             </div>
         </div>
     }
