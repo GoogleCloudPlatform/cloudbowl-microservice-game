@@ -6,7 +6,7 @@ metadata:
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
-  partitions: 10
+  partitions: 12
   replicas: 2
   config:
       retention.ms: -1
@@ -20,7 +20,7 @@ metadata:
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
-  partitions: 10
+  partitions: 12
   replicas: 2
   config:
       retention.ms: -1
@@ -37,7 +37,7 @@ metadata:
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
-  partitions: 10
+  partitions: 12
   replicas: 2
 ---
 apiVersion: kafka.strimzi.io/v1beta1
@@ -48,7 +48,7 @@ metadata:
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
-  partitions: 10
+  partitions: 12
   replicas: 2
 ---
 apiVersion: kafka.strimzi.io/v1beta1
@@ -59,7 +59,7 @@ metadata:
   labels:
     strimzi.io/cluster: cloudbowl
 spec:
-  partitions: 10
+  partitions: 12
   replicas: 2
 ---
 apiVersion: apps/v1
@@ -69,7 +69,7 @@ metadata:
     app: cloudbowl-battle
   name: cloudbowl-battle
 spec:
-  replicas: 1
+  replicas: 6
   selector:
     matchLabels:
       app: cloudbowl-battle
