@@ -10,6 +10,7 @@ GET         /:arena/admin                               controllers.Main.admin(a
 POST        /:arena/scoresreset                         controllers.Main.scoresReset(arena)
 POST        /:arena/join                                controllers.Main.joinValidate(arena)
 POST        /:arena/admin                               controllers.Main.adminValidate(arena)
+POST        /:arena/admin/playerdelete                  controllers.Main.adminPlayerDelete(arena)
 
 GET         /assets/*file                               controllers.Assets.versioned(path="/public", file: Asset)
 ->          /webjars                                    webjars.Routes

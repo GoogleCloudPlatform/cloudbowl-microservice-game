@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import play.api.Configuration
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
+import play.api.libs.concurrent.Futures
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws.WSClient
 import play.api.mvc.InjectedController
@@ -43,7 +44,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 // todo: possible race condition - for join & admin, players & arena config may not have been received when the form is submitted
-class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, configuration: Configuration)
+class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, configuration: Configuration, futures: Futures)
                     (joinTemplate: views.html.join, adminTemplate: views.html.admin, homeTemplate: views.html.home)
                     (implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
@@ -197,10 +198,11 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     }
   }
 
-  // todo: remove players
   def admin(arena: Arena.Path) = Action.async { implicit request =>
-    query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].map { arenaConfig =>
-      Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, None))
+    query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].flatMap { arenaConfig =>
+      query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].map { players =>
+        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), players))
+      }
     }
   }
 
@@ -239,8 +241,32 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
           Redirect(controllers.routes.Main.index(arena))
 
         case _ =>
-          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions))
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, Set.empty))
       }
+    }
+  }
+
+  def adminPlayerDelete(arena: Arena.Path) = Action.async(parse.formUrlEncoded) { request =>
+    val maybeProvidedAdminPassword = request.body.get("adminPassword").flatMap(_.headOption).filter(_.nonEmpty)
+    val maybeService = request.body.get("service").flatMap(_.headOption).filter(_.nonEmpty)
+
+    val adminPasswordInvalid = maybeAdminPassword.flatMap { adminPassword =>
+      Option.unless(maybeProvidedAdminPassword.contains(adminPassword))("Incorrect Admin Password")
+    }
+
+    adminPasswordInvalid.fold {
+      maybeService.fold {
+        Future.successful(BadRequest("No service was sent"))
+      } { service =>
+        val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerLeave(service))
+        Source.single(record).to(playerUpdateSink).run()
+        // todo: better way to ack the change otherwise the players list in the actor likely hasn't updated yet
+        futures.delayed(2.seconds) {
+          Future.successful(Redirect(routes.Main.admin(arena)))
+        }
+      }
+    } { error =>
+      Future.successful(Unauthorized(error))
     }
   }
 
