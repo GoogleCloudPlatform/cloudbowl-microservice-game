@@ -15,7 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, name: Option[String], url: Option[String], urlInvalid: Option[String])(implicit request: RequestHeader)
+@(arena: Arena.Path, name: Option[String], nameInvalid: Option[String], url: Option[String], urlInvalid: Option[String])(implicit request: RequestHeader)
 
 @import helper._
 
@@ -47,7 +47,14 @@
                             @CSRF.formField
                             <div class="form-group">
                                 <label for="name">Your Name</label>
-                                <input class="form-control" id="name" name="name" value="@name.getOrElse("")" required>
+                                @nameInvalid.fold {
+                                    <input class="form-control is-valid" id="name" name="name" value="@name.getOrElse("")" required>
+                                } { message =>
+                                    <input class="form-control is-invalid" id="name" name="name" value="@name.getOrElse("")" required>
+                                    <div class="invalid-feedback">
+                                        @message
+                                    </div>
+                                }
                             </div>
                             <div class="form-group">
                                 <label for="url">Microservice URL</label>

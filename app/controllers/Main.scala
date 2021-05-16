@@ -27,7 +27,7 @@ import models.Arena.{ArenaConfig, ArenaState, PathedArenaConfig, PathedPlayers}
 import models.Events._
 import models.{Arena, Direction, Player, PlayerState}
 import org.apache.kafka.clients.producer.ProducerRecord
-import play.api.Configuration
+import play.api.{Configuration, Environment}
 import play.api.http.ContentTypes
 import play.api.libs.EventSource
 import play.api.libs.concurrent.Futures
@@ -44,7 +44,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 // todo: possible race condition - for join & admin, players & arena config may not have been received when the form is submitted
-class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, configuration: Configuration, futures: Futures)
+class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, configuration: Configuration, futures: Futures, profanity: Profanity)
                     (joinTemplate: views.html.join, adminTemplate: views.html.admin, homeTemplate: views.html.home)
                     (implicit actorSystem: ActorSystem, ec: ExecutionContext) extends InjectedController {
 
@@ -84,7 +84,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     request.session.get(avatarSessionKey).fold {
       BadRequest(avatarSessionNotFound)
     } { _ =>
-      Ok(joinTemplate(arena, None, None, None))
+      Ok(joinTemplate(arena, None, None, None, None))
     }
   }
 
@@ -144,9 +144,24 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
         }
       }
 
+      val nameInvalid: Option[String] = maybeName.fold[Option[String]](Some("Name must not be empty")) { name =>
+        if (name.length > 64) {
+          Some("Name must be less than 65 characters")
+        }
+        else if ("[^a-zA-Z0-9\\s]".r.findFirstIn(name).isDefined) {
+          Some("Name must only contain letters, numbers, and spaces")
+        }
+        else if (profanity.matches(name)) {
+          Some("Name contains invalid words")
+        }
+        else {
+          None
+        }
+      }
+
       urlInvalidFuture.map { urlInvalid =>
-        (maybeAction, maybeName, maybeUrl, urlInvalid) match {
-          case (Some("add"), Some(name), Some(service), Right(maybePlayer)) =>
+        (maybeAction, maybeName, nameInvalid, maybeUrl, urlInvalid) match {
+          case (Some("add"), Some(name), None, Some(service), Right(maybePlayer)) =>
             maybePlayer.foreach { existingPlayer =>
               val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerLeave(existingPlayer.service))
               Source.single(record).to(playerUpdateSink).run()
@@ -157,7 +172,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
             Source.single(record).to(playerUpdateSink).run()
             Redirect(controllers.routes.Main.index(arena))
           case _ =>
-            Ok(joinTemplate(arena, maybeName, maybeUrl, urlInvalid.left.toOption))
+            Ok(joinTemplate(arena, maybeName, nameInvalid, maybeUrl, urlInvalid.left.toOption))
         }
       }
     }
@@ -345,6 +360,19 @@ class Summaries @Inject()(query: Query)(implicit actorSystem: ActorSystem) {
 
 }
 
+@Singleton
+class Profanity @Inject() (environment: Environment) {
+
+  private val words: Set[String] = environment.resourceAsStream("google-profanity-words/list.txt").map { inputStream =>
+    scala.io.Source.fromInputStream(inputStream).getLines().toSet
+  }.getOrElse(throw new Exception("google-profanity-words/list.txt not found"))
+
+  def matches(s: String): Boolean = {
+    val clean = s.takeWhile(_.isLetterOrDigit).toLowerCase
+    words.exists(clean.contains)
+  }
+
+}
 
 class StartModule extends AbstractModule {
   override def configure() = {
