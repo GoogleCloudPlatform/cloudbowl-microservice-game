@@ -95,23 +95,21 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       }
     } { avatar =>
       val maybeName = request.body.get("name").flatMap(_.headOption).filter(_.nonEmpty)
-      val maybeUrl = request.body.get("url").flatMap(_.headOption).filter(_.nonEmpty)
+      val maybeUrl = request.body.get("url").flatMap(_.headOption).filter(_.nonEmpty).flatMap { url =>
+        Try(new URL(url)).toOption
+      }
       val maybeAction = request.body.get("action").flatMap(_.headOption)
 
       val pic = new URL(s"$avatarBaseUrl/$avatar.png")
 
       val urlInvalidFuture = maybeUrl.fold[Future[Either[String, Option[Player]]]](Future.successful(Left("url is empty"))) { url =>
-        if (!url.startsWith("https://")) {
+        if (url.getProtocol != "https") {
           Future.successful(Left("url must use https"))
         }
         else {
-          def host(s: String): String = {
-            s.stripPrefix("http://").stripPrefix("https://").takeWhile(_ != '/').takeWhile(_ != ':').toLowerCase
-          }
-
           query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].flatMap { players =>
             val serviceExists = players.exists { player =>
-              host(player.service) == host(url)
+              new URL(player.service).getHost.toLowerCase == url.getHost.toLowerCase
             }
 
             val maybePlayer = players.find { player =>
@@ -121,11 +119,11 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
 
             // validate service
             if (!serviceExists) {
-              val player = Player(url, "test", new URL(s"$avatarBaseUrl/285/test.png"))
+              val player = Player(url.toString, "test", new URL(s"$avatarBaseUrl/285/test.png"))
               val playerState = PlayerState(0, 0, Direction.N, false, 0, Set.empty, None)
               val arenaState = ArenaState(ArenaConfig("test", "test", "2728"), Map(player -> playerState), ZonedDateTime.now())
               val json = Arena.playerJson(arenaState, player)
-              wsClient.url(url).post(json).map { response =>
+              wsClient.url(url.toString).post(json).map { response =>
                 if (response.status != OK) {
                   Left("Microservice did not return status 200")
                 }
@@ -167,12 +165,12 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
               Source.single(record).to(playerUpdateSink).run()
             }
 
-            val player = Player(service, name, pic)
+            val player = Player(service.toString, name, pic)
             val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
             Source.single(record).to(playerUpdateSink).run()
             Redirect(controllers.routes.Main.index(arena))
           case _ =>
-            Ok(joinTemplate(arena, maybeName, nameInvalid, maybeUrl, urlInvalid.left.toOption))
+            Ok(joinTemplate(arena, maybeName, nameInvalid, maybeUrl.map(_.toString), urlInvalid.left.toOption))
         }
       }
     }
