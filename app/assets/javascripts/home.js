@@ -95,10 +95,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const playerDiv = document.createElement('div');
                 playerDiv.classList.add('score');
 
+                const picDiv = document.createElement('div');
                 const pic = document.createElement('img');
-
                 pic.src = player.pic
-                playerDiv.appendChild(pic);
+                picDiv.appendChild(pic);
+                playerDiv.appendChild(picDiv);
 
                 const name = document.createElement('span');
                 name.classList.add('name');
