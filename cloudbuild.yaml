@@ -1,4 +1,16 @@
 steps:
+- name: 'gcr.io/cloud-builders/git'
+  entrypoint: 'bash'
+  env: [ 'GIT_DISCOVERY_ACROSS_FILESYSTEM=1' ]
+  args:
+    - '-c'
+    - |
+      git init
+      git config -f .gitmodules submodule.google-profanity-words.url https://github.com/RobertJGabriel/Google-profanity-words.git
+      git config -f .gitmodules submodule.google-profanity-words.path conf/google-profanity-words
+      git submodule init
+      git submodule update
+
 - name: 'adoptopenjdk/openjdk8'
   entrypoint: './sbt'
   args: ['test']

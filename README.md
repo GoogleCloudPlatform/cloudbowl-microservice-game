@@ -54,10 +54,11 @@ document.body.dataset.paused = true;
 1. Create GKE Cluster with Cloud Run
     ```
     gcloud config set core/project YOUR_PROJECT
+
+    gcloud services enable compute.googleapis.com container.googleapis.comcontainer.googleapis.com containerregistry.googleapis.com cloudbuild.googleapis.com
+
     gcloud config set compute/region us-central1
     gcloud config set container/cluster cloudbowl
-
-    gcloud services enable container.googleapis.com containerregistry.googleapis.com cloudbuild.googleapis.com
 
     gcloud container clusters create \
       --region=$(gcloud config get-value compute/region) \
@@ -90,6 +91,8 @@ document.body.dataset.paused = true;
     ```
 1. Create a ConfigMap named `cloudbowl-config`:
     ```
+    export APPLICATION_SECRET=$(head -c 32 /dev/urandom | base64)
+    export ADMIN_PASSWORD=PICK_A_PASSWORD # Used for creating / updating arenas
     cat <<EOF | kubectl apply -f -
     apiVersion: v1
     kind: ConfigMap
@@ -97,8 +100,8 @@ document.body.dataset.paused = true;
       name: cloudbowl-config
     data:
       WEBJARS_USE_CDN: 'true'
-      APPLICATION_SECRET: # Generated secret key (i.e. `head -c 32 /dev/urandom | base64`)
-      ADMIN_PASSWORD: # Used for creating / updating arenas
+      APPLICATION_SECRET: $APPLICATION_SECRET
+      ADMIN_PASSWORD: $ADMIN_PASSWORD
     EOF
     ```
 1. Setup Cloud Build with a trigger on master, excluding `samples/**`, with Configuration Type set to *Cloud Build configuration file*, and substitution vars `_CLOUDSDK_COMPUTE_REGION` and `_CLOUDSDK_CONTAINER_CLUSTER`.  Running the trigger will create the Kafka topics, deploy the battle service, and the web app.

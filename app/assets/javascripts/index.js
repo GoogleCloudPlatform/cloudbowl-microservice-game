@@ -189,9 +189,11 @@ document.addEventListener('DOMContentLoaded', () => {
               const scoreLine = document.createElement('div');
               scoreLine.className = 'score';
 
+              const scoreImgDiv = document.createElement('div');
               const scoreImg = document.createElement('img');
               scoreImg.src = player.pic;
-              scoreLine.appendChild(scoreImg);
+              scoreImgDiv.appendChild(scoreImg);
+              scoreLine.appendChild(scoreImgDiv);
 
               const name = document.createElement('span');
               name.innerText = player.name;

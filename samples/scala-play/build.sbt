@@ -2,14 +2,14 @@ enablePlugins(LauncherJarPlugin)
 
 name := "cloudpit-scala-play"
 
-scalaSource in Compile := baseDirectory.value / "app"
+Compile / scalaSource := baseDirectory.value / "app"
 
-resourceDirectory in Compile := baseDirectory.value / "app"
+Compile / resourceDirectory := baseDirectory.value / "app"
 
 scalaVersion := "2.13.5"
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.7",
+  "com.typesafe.play" %% "play-akka-http-server" % "2.8.8",
   "org.slf4j" % "slf4j-simple" % "1.7.21"
 )
 
@@ -45,6 +45,6 @@ scalacOptions ++= Seq(
 
 Global / cancelable := false
 
-publishArtifact in (Compile, packageDoc) := false
+Compile / packageDoc / publishArtifact := false
 
-sources in (Compile,doc) := Seq.empty
+Compile / doc / sources := Seq.empty

@@ -15,7 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL])(implicit request: RequestHeader)
+@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL], players: Set[Player])(implicit request: RequestHeader)
 
 @import helper._
 
@@ -28,7 +28,7 @@
 
     @webJarsUtil.locate("bootstrap.min.css").css()
 
-    <style type="text/css">
+    <style>
         .container {
             margin-top: 50px;
         }
@@ -97,6 +97,50 @@
                         }
                     </div>
                 </div>
+                <br/>
+                @if(players.nonEmpty) {
+                    <div class="card">
+                        <h5 class="card-header">Remove @arena Arena Players</h5>
+                        <div class="card-body">
+                            @form(controllers.routes.Main.adminPlayerDelete(arena)) {
+                                @CSRF.formField
+
+                                @if(requiresAdminPassword) {
+                                    <div class="form-group">
+                                        <label for="adminPassword">Admin Password</label>
+                                        @adminPassword.fold {
+                                            <input class="form-control" id="adminPassword" name="adminPassword" type="password" required>
+                                        } { providedAdminPassword =>
+                                            @adminPasswordInvalid.fold {
+                                                <input class="form-control is-valid" id="adminPassword" name="adminPassword" type="password" value="@providedAdminPassword" required>
+                                            } { message =>
+                                                <input class="form-control is-invalid" id="adminPassword" name="adminPassword" type="password" value="@providedAdminPassword" required>
+                                                <div class="invalid-feedback">
+                                                @message
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+
+                                <ul class="list-group">
+                                    @for(player <- players) {
+                                        <li class="list-group-item">
+                                            <button type="submit" class="btn btn-danger" name="service" value="@player.service">
+                                                Delete
+                                                @* todo: nice icon *@
+                                                @*<svg class="bi bi-volume-mute-fill"></svg>*@
+                                            </button>
+                                            @* todo: latency *@
+                                            @* todo: score *@
+                                            <img src="@player.pic" width="24px"/> @player.name
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>

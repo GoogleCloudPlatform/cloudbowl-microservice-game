@@ -107,6 +107,14 @@ object KafkaProducerApp extends App {
       Source.single(record).to(Kafka.sink[K, V]).run()
     }
 
+    def playerJoin(arena: String) = {
+      val name = Random.alphanumeric.take(6).mkString
+      val service = s"http://localhost:8080/$name"
+      val img = new URL(s"$avatarBaseUrl/285/$name.png")
+      val player = Player(service, name, img)
+      send(Topics.playerUpdate, arena, PlayerJoin(player))
+    }
+
     if (line.nonEmpty) {
       line.split("/") match {
         case Array(arena, "create") =>
@@ -114,11 +122,10 @@ object KafkaProducerApp extends App {
           send(Topics.arenaConfig, arena, arenaConfig)
 
         case Array(arena, "playerjoin") =>
-          val name = Random.alphanumeric.take(6).mkString
-          val service = s"http://localhost:8080/$name"
-          val img = new URL(s"$avatarBaseUrl/285/$name.png")
-          val player = Player(service, name, img)
-          send(Topics.playerUpdate, arena, PlayerJoin(player))
+          playerJoin(arena)
+
+        case Array(arena, "playerfill", numString) =>
+          (1 to numString.toInt).foreach( _ => playerJoin(arena))
 
         case Array(arena, "playerleave", name) =>
           val service = s"http://localhost:8080/$name"

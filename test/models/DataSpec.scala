@@ -21,14 +21,14 @@ import java.time.ZonedDateTime
 import models.Arena.{ArenaConfig, ArenaState}
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.EitherValues
 import play.api.test.Helpers._
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 
 
-class DataSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
+class DataSpec extends AnyWordSpec with Matchers with EitherValues {
 
   private implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
@@ -192,6 +192,84 @@ class DataSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
       updatedState.state(player1).score must equal (0)
       updatedState.state(player2).score must equal (0)
     }
+  }
+
+  val alwaysProfane = new Profanity {
+    override def matches(s: String): Boolean = true
+  }
+
+  val neverProfane = new Profanity {
+    override def matches(s: String): Boolean = false
+  }
+
+  val avatarBase = "http://asdf.com"
+
+  "Player.validate" must {
+    "work" in {
+      val name = Some("Jon")
+      val githubUser = Some("GoogleCloudPlatform")
+      val service = Some(new URL("https://zxcv.com"))
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(None)
+      def validateService(url: URL) = Future.successful(None)
+
+      val result = await(Player.validate(name, service, githubUser)(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(validateService))
+
+      result must equal (Right(Player(service.get.toString, name.get, new URL("https://github.com/GoogleCloudPlatform.png"))))
+    }
+    "fail when the name is invalid" in {
+      val githubUser = Some("GoogleCloudPlatform")
+      val service = Some(new URL("https://zxcv.com"))
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(None)
+      def validateService(url: URL) = Future.successful(None)
+
+      def validate(maybeName: Option[String], profanity: Profanity = neverProfane) = {
+        await(Player.validate(maybeName, service, githubUser)(profanity, avatarBase)(fetchPlayers)(validateGithubUser)(validateService))
+      }
+
+      validate(None).left.value._1 mustBe defined
+      validate(Some("$")).left.value._1 mustBe defined
+      validate(Some("Jon"), alwaysProfane).left.value._1 mustBe defined
+    }
+    "fail when the service is invalid" in {
+      val name = Some("Jon")
+      val githubUser = Some("foo")
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(None)
+
+      def validate(service: Option[URL], invalid: Option[String]) = {
+        await(Player.validate(name, service, githubUser)(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(_ => Future.successful(invalid)))
+      }
+
+      validate(None, None).left.value._2 mustBe defined
+      validate(Some(new URL("http://asdf.com")), None).left.value._2 mustBe defined
+      validate(Some(new URL("https://asdf.com")), Some("bad")).left.value._2 mustBe defined
+    }
+    "fail when the githubuser is invalid" in {
+      val name = Some("Jon")
+      val githubUser = Some("foo")
+      val service = Some(new URL("https://zxcv.com"))
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(Some("bad"))
+      def validateService(url: URL) = Future.successful(None)
+
+      val result = await(Player.validate(name, service, githubUser)(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(validateService))
+
+      result.left.value._3 mustBe defined
+    }
+    "fail with multiple errors" in {
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(Some("bad"))
+      def validateService(url: URL) = Future.successful(Some("bad"))
+
+      val result = await(Player.validate(None, None, Some("asdf"))(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(validateService))
+
+      result.left.value._1 mustBe defined
+      result.left.value._2 mustBe defined
+      result.left.value._3 mustBe defined
+    }
+    // todo: validation of users not being duplicates (github & service)
   }
 
 }

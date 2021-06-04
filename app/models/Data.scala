@@ -435,6 +435,93 @@ object Player {
   type Service = String
   implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
   implicit val playerWrites: Writes[Player] = Json.writes[Player]
+
+  type NameInvalid = Option[String]
+  type ServiceInvalid = Option[String]
+  type GithubUserInvalid = Option[String]
+
+  def validate(maybeName: Option[String], maybeUrl: Option[URL], maybeGithubUsername: Option[String])
+              (profanity: Profanity, avatarBaseUrl: String)
+              (fetchPlayers: => Future[Set[Player]])
+              (validateGithubUser: String => Future[Option[String]])
+              (validateService: URL => Future[Option[String]])
+              (implicit executionContext: ExecutionContext): Future[Either[(NameInvalid, ServiceInvalid, GithubUserInvalid), Player]] = {
+
+    val nameOrError = maybeName.fold[Either[String, String]](Left("Name must not be empty")) { name =>
+      if (name.length > 64) {
+        Left("Name must be less than 65 characters")
+      }
+      else if ("[^a-zA-Z0-9\\s]".r.findFirstIn(name).isDefined) {
+        Left("Name must only contain letters, numbers, and spaces")
+      }
+      else if (profanity.matches(name)) {
+        Left("Name contains invalid words")
+      }
+      else {
+        Right(name)
+      }
+    }
+
+    val maybeGithubPicUrl = maybeGithubUsername.map { githubUsername =>
+      s"https://github.com/$githubUsername.png"
+    }
+
+    val githubUserInvalidFuture = maybeGithubPicUrl.fold[Future[Option[String]]](Future.successful(None)) { pic =>
+      validateGithubUser(pic).flatMap { invalid =>
+        invalid.fold[Future[Option[String]]] {
+          fetchPlayers.map { players =>
+            players.find(_.pic.toString.toLowerCase == pic.toLowerCase).map(_ => "Player with that GitHub username exists")
+          }
+        } { error =>
+          Future.successful(Some(error))
+        }
+      }
+    }
+
+    val serviceOrErrorFuture = maybeUrl.fold[Future[Either[String, URL]]](Future.successful(Left("url is empty"))) { url =>
+      if (url.getProtocol != "https") {
+        Future.successful(Left("url must use https"))
+      }
+      else {
+        fetchPlayers.flatMap { players =>
+          val serviceExists = players.exists { player =>
+            new URL(player.service).getHost.toLowerCase == url.getHost.toLowerCase
+          }
+
+          if (serviceExists) {
+            Future.successful(Left("Player with that hostname already exists in the arena"))
+          }
+          else {
+            validateService(url).map(_.toLeft(url))
+          }
+        }
+      }
+    }
+
+    for {
+      githubUserInvalid <- githubUserInvalidFuture
+      serviceOrError <- serviceOrErrorFuture
+    } yield {
+      // todo: this is kinda fugly
+
+      nameOrError.fold({ nameInvalid =>
+        Left((Some(nameInvalid), serviceOrError.left.toOption, githubUserInvalid))
+      }, { name =>
+        serviceOrError.fold({ serviceInvalid =>
+          Left((None, Some(serviceInvalid), githubUserInvalid))
+        }, { service =>
+          githubUserInvalid.fold[Either[(Option[String], Option[String], Option[String]), Player]] {
+            val pic = maybeGithubPicUrl.getOrElse(s"$avatarBaseUrl/285/$name.png")
+            val player = Player(service.toString, name, new URL(pic))
+            Right(player)
+          } { githubUserError =>
+            Left((None, None, Some(githubUserError)))
+          }
+        })
+      })
+    }
+  }
+
 }
 
 // todo: encode the circular laws in types
