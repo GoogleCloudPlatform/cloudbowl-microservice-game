@@ -68,8 +68,8 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     Ok(homeTemplate(request))
   }
 
-  def index(arena: Arena.Path) = Action { implicit request =>
-    Ok(views.html.index(arena))
+  def watch(arena: Arena.Path) = Action { implicit request =>
+    Ok(views.html.watch(arena))
   }
 
   def join(arena: Arena.Path) = Action.async { implicit request =>
@@ -127,7 +127,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       case Right(player) if maybeAction.contains("add") =>
         val record = new ProducerRecord[Arena.Path, PlayerUpdate](Arena.KafkaConfig.Topics.playerUpdate, arena, PlayerJoin(player))
         Source.single(record).to(playerUpdateSink).run()
-        Redirect(controllers.routes.Main.index(arena))
+        Redirect(controllers.routes.Main.watch(arena))
       case _ =>
         Ok(joinTemplate(arena, maybeName, None, maybeUrl.map(_.toString), None, maybeGithubUsername, None))
     }
@@ -209,7 +209,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
           val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
           Source.single(record).to(arenaConfigSink).run()
           // todo: when there are no players, the arena does not load
-          Redirect(controllers.routes.Main.index(arena))
+          Redirect(controllers.routes.Main.watch(arena))
 
         case _ =>
           Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, Set.empty))
