@@ -87,7 +87,7 @@
                                 } { sGithubUser =>
                                     @githubUserInvalid.fold {
                                         <input class="form-control is-valid" id="githubUsername" name="githubUsername" value="@sGithubUser">
-                                        <img src="https://github.com/@{sGithubUser}.png" width="64" style="margin-top: 10px;">
+                                        <img src="https://avatars.githubusercontent.com/@{sGithubUser}" width="64" style="margin-top: 10px;">
                                     } { message =>
                                         <input class="form-control is-invalid" id="githubUsername" name="githubUsername" value="@sGithubUser">
                                         <div class="invalid-feedback">

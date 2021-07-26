@@ -463,7 +463,7 @@ object Player {
     }
 
     val maybeGithubPicUrl = maybeGithubUsername.map { githubUsername =>
-      s"https://github.com/$githubUsername.png"
+      s"https://avatars.githubusercontent.com/$githubUsername"
     }
 
     val githubUserInvalidFuture = maybeGithubPicUrl.fold[Future[Option[String]]](Future.successful(None)) { pic =>
