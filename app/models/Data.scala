@@ -165,7 +165,7 @@ object Arena {
   case class PathedPlayers(path: Path, players: Set[Player]) extends Pathed
   case class PathedArenaConfig(path: Path, arenaConfig: ArenaConfig) extends Pathed
 
-  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode, instructions: Option[URL] = None)
+  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode, instructions: Option[URL] = None, joinable: Boolean = true)
   case class ArenaState(config: ArenaConfig, state: Map[Player, PlayerState], startTime: ZonedDateTime) {
     val dims: Dimensions = calcDimensions(state.keys.size)
 

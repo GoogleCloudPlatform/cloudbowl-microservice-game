@@ -36,14 +36,14 @@ object Events {
 
   case class PlayerSummary(pic: URL, name: String, score: Int)
 
-  case class Summary(name: String, numPlayers: Int, topPlayers: Seq[PlayerSummary])
+  case class Summary(name: String, joinable: Boolean, numPlayers: Int, topPlayers: Seq[PlayerSummary])
 
   def arenaUpdateToSummary(arenaUpdate: ArenaUpdate): Summary = {
     val topPlayers = arenaUpdate.arenaState.state.toSeq.sortBy(_._2.score)(Ordering.Int.reverse).take(5).map { case (player, state) =>
       PlayerSummary(player.pic, player.name, state.score)
     }
 
-    Summary(arenaUpdate.arenaState.config.name, arenaUpdate.arenaState.state.size, topPlayers)
+    Summary(arenaUpdate.arenaState.config.name, arenaUpdate.arenaState.config.joinable, arenaUpdate.arenaState.state.size, topPlayers)
   }
 
   implicit val urlWrites: Writes[URL] = Writes[URL](url => JsString(url.toString))
@@ -67,6 +67,7 @@ object Events {
     (__ \ "name").write[String] ~
     (__ \ "emoji_code").write[String] ~
     (__ \ "instructions").writeNullable[URL] ~
+    (__ \ "joinable").write[Boolean] ~
     (__ \ "width").write[Int] ~
     (__ \ "height").write[Int] ~
     (__ \ "can_reset_in_seconds").write[Long] ~
@@ -76,6 +77,7 @@ object Events {
       arenaUpdate.arenaState.config.name,
       arenaUpdate.arenaState.config.emojiCode,
       arenaUpdate.arenaState.config.instructions,
+      arenaUpdate.arenaState.config.joinable,
       arenaUpdate.arenaState.dims.width,
       arenaUpdate.arenaState.dims.height,
       arenaUpdate.canResetIn.toSeconds,

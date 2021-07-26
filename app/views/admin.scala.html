@@ -15,8 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL], players: Set[Player])(implicit request: RequestHeader)
-
+@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL], joinable: Boolean, players: Set[Player])(implicit request: RequestHeader)
 @import helper._
 
 <!doctype html>
@@ -73,6 +72,11 @@
                             <div class="form-group">
                                 <label for="instructions">Instructions</label>
                                 <input class="form-control" id="instructions" name="instructions" type="url" value="@instructions.getOrElse("")">
+                            </div>
+
+                            <div class="form-group form-check">
+                                <input class="form-check-input" id="joinable" name="joinable" type="checkbox" @if(joinable) { checked }>
+                                <label class="form-check-label" for="joinable">Joinable</label>
                             </div>
 
                             @if(requiresAdminPassword) {

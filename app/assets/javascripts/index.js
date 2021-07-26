@@ -93,22 +93,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
           title.textContent = data.name;
 
+          if (data.joinable) {
+            document.getElementById("join").style['display'] = 'inline-block';
+          } else {
+            document.getElementById("join").style['display'] = 'none';
+          }
+
           if (data.players.length === 0) {
             modal.style.visibility = 'visible';
 
-            const joinUrl = window.location.href + '/join';
+            if (data.joinable) {
+              const joinUrl = window.location.href + '/join';
 
-            const instructionsLink = (data.instructions !== undefined) ? `<a href="${data.instructions}" target="_blank">instructions</a> | ` : '';
+              const instructionsLink = (data.instructions !== undefined) ? `<a href="${data.instructions}" target="_blank">instructions</a> | ` : '';
 
-            const joinLink = `<a href="${joinUrl}">join</a>`;
+              const joinLink = `<a href="${joinUrl}">join</a>`;
 
-            modalMessage(`No players yet. [ ${instructionsLink}${joinLink} ]`);
+              modalMessage(`No players yet. [ ${instructionsLink}${joinLink} ]`);
+            } else {
+              modalMessage('Arena is closed');
+            }
           } else {
             modal.style.visibility = 'hidden';
 
             if (data.instructions !== undefined) {
-              instructions.action = data.instructions;
-              instructions.style.visibility = 'visible';
+              if (data.joinable) {
+                instructions.action = data.instructions;
+                instructions.style.visibility = 'visible';
+              } else {
+                instructions.style.visibility = 'hidden';
+              }
             }
 
             if (data.can_reset_in_seconds > 0) {

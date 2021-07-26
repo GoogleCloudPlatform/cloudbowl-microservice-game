@@ -72,8 +72,19 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     Ok(views.html.index(arena))
   }
 
-  def join(arena: Arena.Path) = Action { implicit request =>
-    Ok(joinTemplate(arena, None, None, None, None, None, None))
+  def join(arena: Arena.Path) = Action.async { implicit request =>
+    query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].map { maybeArenaConfig =>
+      maybeArenaConfig.fold {
+        BadRequest("Arena does not exist")
+      } { arenaConfig =>
+        if (arenaConfig.joinable) {
+          Ok(joinTemplate(arena, None, None, None, None, None, None))
+        }
+        else {
+          BadRequest("Arena is closed")
+        }
+      }
+    }
   }
 
   def joinValidate(arena: Arena.Path) = Action.async(parse.formUrlEncoded) { implicit request =>
@@ -87,7 +98,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     val fetchPlayers = query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]]
 
     def validateGitHubUser(url: String) = {
-      wsClient.url(url.toString).get().map { response =>
+      wsClient.url(url).get().map { response =>
         Option.unless(response.status == OK)("GitHub username was not found")
       }
     }
@@ -160,7 +171,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
   def admin(arena: Arena.Path) = Action.async { implicit request =>
     query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].flatMap { arenaConfig =>
       query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].map { players =>
-        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), players))
+        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), arenaConfig.forall(_.joinable), players))
       }
     }
   }
@@ -172,6 +183,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     val maybeInstructions = request.body.get("instructions").flatMap(_.headOption).flatMap { url =>
       Try(new URL(url)).toOption
     }
+    val joinable = request.body.get("joinable").flatMap(_.headOption).isDefined
 
     // to Either[Error, EmojiCode]
     val emojiInvalidFuture = maybeEmoji.fold[Future[Option[String]]](Future.successful(None)) { emoji =>
@@ -193,14 +205,14 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     emojiInvalidFuture.map { emojiInvalid =>
       (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid, maybeInstructions) match {
         case (Some(name), Some(emoji), None, None, instructions) =>
-          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions)
+          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions, joinable)
           val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
           Source.single(record).to(arenaConfigSink).run()
           // todo: when there are no players, the arena does not load
           Redirect(controllers.routes.Main.index(arena))
 
         case _ =>
-          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, Set.empty))
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, Set.empty))
       }
     }
   }

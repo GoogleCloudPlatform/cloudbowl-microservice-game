@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stringSource.onopen = () => { };
       stringSource.onmessage = (message) => {
         const data = JSON.parse(message.data);
+        //console.log(data);
 
         for (const arenaId in data) {
           const maybeArenaDiv = document.getElementById(arenaId);
@@ -80,7 +81,13 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
           arenaDiv.getElementsByClassName("watch")[0].action = '/' + arenaId;
-          arenaDiv.getElementsByClassName("join")[0].action = '/' + arenaId + '/join';
+
+          if (arenaData.joinable) {
+            arenaDiv.getElementsByClassName("join")[0].action = '/' + arenaId + '/join';
+            arenaDiv.getElementsByClassName("join")[0].style['display'] = 'block';
+          } else {
+            arenaDiv.getElementsByClassName("join")[0].style['display'] = 'none';
+          }
         }
       };
 
