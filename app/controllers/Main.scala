@@ -38,6 +38,7 @@ import play.api.mvc.InjectedController
 import java.net.URL
 import java.time.ZonedDateTime
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -171,7 +172,9 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
   def admin(arena: Arena.Path) = Action.async { implicit request =>
     query.arenaConfigActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Option[ArenaConfig]].flatMap { arenaConfig =>
       query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].map { players =>
-        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), arenaConfig.forall(_.joinable), players))
+        val floodInterval = arenaConfig.map(_.floodInterval).getOrElse(Duration.Zero)
+        val badInterval = arenaConfig.map(_.badInterval).getOrElse(Duration.Zero)
+        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), arenaConfig.forall(_.joinable), floodInterval, badInterval, players))
       }
     }
   }
@@ -184,6 +187,9 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       Try(new URL(url)).toOption
     }
     val joinable = request.body.get("joinable").flatMap(_.headOption).isDefined
+
+    val floodInterval = request.body.get("floodIntervalMinutes").flatMap(_.headOption).flatMap(_.toIntOption).map(FiniteDuration(_, TimeUnit.MINUTES)).getOrElse(Duration.Zero)
+    val badInterval = request.body.get("badIntervalMinutes").flatMap(_.headOption).flatMap(_.toIntOption).map(FiniteDuration(_, TimeUnit.MINUTES)).getOrElse(Duration.Zero)
 
     // to Either[Error, EmojiCode]
     val emojiInvalidFuture = maybeEmoji.fold[Future[Option[String]]](Future.successful(None)) { emoji =>
@@ -205,14 +211,14 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     emojiInvalidFuture.map { emojiInvalid =>
       (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid, maybeInstructions) match {
         case (Some(name), Some(emoji), None, None, instructions) =>
-          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions, joinable)
+          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions, joinable, floodInterval, badInterval)
           val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
           Source.single(record).to(arenaConfigSink).run()
           // todo: when there are no players, the arena does not load
           Redirect(controllers.routes.Main.watch(arena))
 
         case _ =>
-          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, Set.empty))
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, floodInterval, badInterval, Set.empty))
       }
     }
   }

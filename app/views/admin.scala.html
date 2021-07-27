@@ -15,7 +15,7 @@
  *@
 
 @this(webJarsUtil: org.webjars.play.WebJarsUtil)
-@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL], joinable: Boolean, players: Set[Player])(implicit request: RequestHeader)
+@(arena: Arena.Path, requiresAdminPassword: Boolean, adminPassword: Option[String], adminPasswordInvalid: Option[String], name: Option[String], emoji: Option[String], emojiInvalid: Option[String], instructions: Option[java.net.URL], joinable: Boolean, floodInterval: scala.concurrent.duration.FiniteDuration, badInterval: scala.concurrent.duration.FiniteDuration, players: Set[Player])(implicit request: RequestHeader)
 @import helper._
 
 <!doctype html>
@@ -77,6 +77,18 @@
                             <div class="form-group form-check">
                                 <input class="form-check-input" id="joinable" name="joinable" type="checkbox" @if(joinable) { checked }>
                                 <label class="form-check-label" for="joinable">Joinable</label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="floodIntervalMinutes">Flood Interval (Minutes)</label>
+                                <input type="number" class="form-control" id="floodIntervalMinutes" name="floodIntervalMinutes" value="@floodInterval.toMinutes" min="0" max="15">
+                                <small class="form-text text-muted">Approx interval to flood a player with requests</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="badIntervalMinutes">Bad Interval (Minutes)</label>
+                                <input type="number" class="form-control" id="badIntervalMinutes" name="badIntervalMinutes" value="@badInterval.toMinutes" min="0" max="15">
+                                <small class="form-text text-muted">Approx interval to send a player a bad request</small>
                             </div>
 
                             @if(requiresAdminPassword) {

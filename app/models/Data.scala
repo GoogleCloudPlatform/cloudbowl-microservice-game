@@ -17,7 +17,7 @@
 package models
 
 import akka.Done
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.kafka.scaladsl.Consumer.Control
 import akka.stream.scaladsl.{Sink, Source}
 import models.Direction.Direction
@@ -30,7 +30,7 @@ import play.api.http.Status
 import play.api.libs.json.{JsObject, JsString, Json, Writes}
 import play.api.libs.ws.ahc.{AhcWSResponse, StandaloneAhcWSResponse}
 import play.api.libs.ws.{StandaloneWSResponse, WSClient, WSRequestExecutor, WSRequestFilter}
-import services.Kafka
+import services.{Chaos, Kafka}
 
 import java.net.URL
 import java.time.ZonedDateTime
@@ -165,7 +165,7 @@ object Arena {
   case class PathedPlayers(path: Path, players: Set[Player]) extends Pathed
   case class PathedArenaConfig(path: Path, arenaConfig: ArenaConfig) extends Pathed
 
-  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode, instructions: Option[URL] = None, joinable: Boolean = true)
+  case class ArenaConfig(path: Path, name: Name, emojiCode: EmojiCode, instructions: Option[URL] = None, joinable: Boolean = true, floodInterval: FiniteDuration = Duration.Zero, badInterval: FiniteDuration = Duration.Zero)
   case class ArenaState(config: ArenaConfig, state: Map[Player, PlayerState], startTime: ZonedDateTime) {
     val dims: Dimensions = calcDimensions(state.keys.size)
 
@@ -213,7 +213,7 @@ object Arena {
   }
 
   def processArenaEvent(arenaParts: ArenaParts, pathed: Pathed)
-                       (implicit ec: ExecutionContext, wsClient: WSClient): Future[ArenaParts] = {
+                       (implicit ec: ExecutionContext, wsClient: WSClient, actorSystem: ActorSystem): Future[ArenaParts] = {
 
     val updatedArenaParts = pathed match {
       case PathedArenaConfig(_, arenaConfig) =>
@@ -402,11 +402,26 @@ object Arena {
     }
   }
 
+  def lucky(duration: FiniteDuration): Boolean = {
+    (duration != Duration.Zero) && (Random.nextLong(duration.toSeconds) == 0)
+  }
+
   def updateArena(current: ArenaState)
                  (playerMove: (ArenaState, Player) => Future[Option[(Move, FiniteDuration)]])
-                 (implicit ec: ExecutionContext): Future[ArenaState] = {
+                 (implicit ec: ExecutionContext, actorSystem: ActorSystem): Future[ArenaState] = {
 
     val playerMovesFutures = current.state.keys.map { player =>
+      val flood = lucky(current.config.floodInterval)
+      val bad = lucky(current.config.badInterval)
+
+      if (flood) {
+        actorSystem.actorOf(Props(new Chaos.Flood(player, current))) ! Chaos.Flood.Send
+      }
+
+      if (bad) {
+        actorSystem.actorOf(Props(new Chaos.Bad(player, current))) ! Chaos.Bad.Send
+      }
+
       playerMove(current, player).map(player -> _)
     }
 
@@ -425,7 +440,8 @@ object Arena {
     ArenaUpdate(arenaState, canResetIn)
   }
 
-  def performArenaUpdate(arenaState: ArenaState)(implicit ec: ExecutionContext, wsClient: WSClient): Future[Option[ArenaState]] = {
+  def performArenaUpdate(arenaState: ArenaState)
+                        (implicit ec: ExecutionContext, wsClient: WSClient, actorSystem: ActorSystem): Future[Option[ArenaState]] = {
     updateArena(arenaState)(playerMoveWs).map(Some(_))
   }
 
