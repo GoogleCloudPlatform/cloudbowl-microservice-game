@@ -16,21 +16,25 @@
 
 package models
 
+import akka.actor.ActorSystem
+
 import java.net.URL
 import java.time.ZonedDateTime
 import models.Arena.{ArenaConfig, ArenaState}
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.scalatest.EitherValues
+import org.scalatest.{BeforeAndAfterAll, EitherValues}
 import play.api.test.Helpers._
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 
 
-class DataSpec extends AnyWordSpec with Matchers with EitherValues {
+class DataSpec extends AnyWordSpec with Matchers with EitherValues with BeforeAndAfterAll {
 
   private implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
+
+  private implicit val actorSystem = ActorSystem.create()
 
   "wasHit" must {
     "get sent to services" in {
@@ -215,7 +219,7 @@ class DataSpec extends AnyWordSpec with Matchers with EitherValues {
 
       val result = await(Player.validate(name, service, githubUser)(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(validateService))
 
-      result must equal (Right(Player(service.get.toString, name.get, new URL("https://github.com/GoogleCloudPlatform.png"))))
+      result must equal (Right(Player(service.get.toString, name.get, new URL("https://avatars.githubusercontent.com/GoogleCloudPlatform"))))
     }
     "fail when the name is invalid" in {
       val githubUser = Some("GoogleCloudPlatform")
@@ -272,4 +276,7 @@ class DataSpec extends AnyWordSpec with Matchers with EitherValues {
     // todo: validation of users not being duplicates (github & service)
   }
 
+  override protected def afterAll(): Unit = {
+    Await.result(actorSystem.terminate(), 5.seconds)
+  }
 }
