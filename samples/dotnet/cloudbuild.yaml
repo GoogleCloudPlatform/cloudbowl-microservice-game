@@ -1,0 +1,7 @@
+steps:
+- name: 'gcr.io/k8s-skaffold/pack'
+  entrypoint: 'pack'
+  args: ['build', '--builder=gcr.io/buildpacks/builder:v1', '--path', 'samples/dotnet', '--publish', 'gcr.io/$PROJECT_ID/cloudbowl-samples-dotnet:$COMMIT_SHA']
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['run', 'deploy', '--image=gcr.io/$PROJECT_ID/cloudbowl-samples-dotnet:$COMMIT_SHA', '--platform=managed', '--project=$PROJECT_ID', '--region=us-central1', '--allow-unauthenticated', '--memory=256Mi', 'cloudbowl-samples-dotnet']
