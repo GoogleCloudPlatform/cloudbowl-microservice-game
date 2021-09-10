@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace cloudbowl.samples.dotnet.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("")]
     public class CloudBowlController : ControllerBase
     {
         [HttpGet]
