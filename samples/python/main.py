@@ -28,7 +28,9 @@ moves = ['F', 'T', 'L', 'R']
 def move():
     request.get_data()
     logger.info(request.json)
-    return moves[2*random.randrange(len(moves))]
+    while True:
+        for i in moves:
+            return i
 
 if __name__ == "__main__":
   app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT', 8080)))
