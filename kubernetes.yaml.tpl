@@ -69,7 +69,7 @@ metadata:
     app: cloudbowl-battle
   name: cloudbowl-battle
 spec:
-  replicas: 1
+  replicas: 5
   selector:
     matchLabels:
       app: cloudbowl-battle
@@ -83,6 +83,9 @@ spec:
         image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
         imagePullPolicy: IfNotPresent
         command: ["battle"]
+        resources:
+          requests:
+            cpu: "2"
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: cloudbowl-kafka-bootstrap.kafka:9092
