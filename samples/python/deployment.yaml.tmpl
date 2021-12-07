@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $SAMPLE-deployment
+  labels:
+    app: $SAMPLE-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: $SAMPLE-app
+  template:
+    metadata:
+      labels:
+        app: $SAMPLE-app
+    spec:
+      containers:
+      - name: $REPO_NAME
+        image: gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080

@@ -1,0 +1,45 @@
+on:
+  push:
+    branches:
+    - main
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  SAMPLE: ${{ secrets.SAMPLE }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  COMMIT_SHA: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: google-github-actions/auth@v0.4.0
+      with:
+        credentials_json: ${{ secrets.GKE_SA_KEY }}
+
+    - uses: google-github-actions/setup-gcloud@v0.3.0
+      with:
+        project_id: ${{ secrets.GKE_PROJECT }}
+
+    - run: |-
+        gcloud auth configure-docker -q
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+
+    - uses: buildpacks/github-actions/setup-pack@v4.1.0
+
+    - run: |-
+        pack build --builder=gcr.io/buildpacks/builder:v1 --publish \
+          gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA
+
+    - uses: nowactions/envsubst@v1
+      with:
+        input: ./deployment.yaml.tmpl
+        output: ./deployment.yaml
+
+    - run: |-
+        kubectl apply -f deployment.yaml
