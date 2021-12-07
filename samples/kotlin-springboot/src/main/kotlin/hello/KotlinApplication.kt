@@ -14,6 +14,10 @@ class KotlinApplication {
 
     @Bean
     fun routes() = router {
+        GET {
+            ServerResponse.ok().body(Mono.just("Let the battle begin!"))
+        }
+
         POST("/**", accept(APPLICATION_JSON)) { request ->
             request.bodyToMono(ArenaUpdate::class.java).flatMap { arenaUpdate ->
                 println(arenaUpdate)

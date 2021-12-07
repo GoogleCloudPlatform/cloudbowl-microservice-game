@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 moves = ['F', 'T', 'L', 'R']
 
+@app.route("/", methods=['GET'])
+def index():
+    return "Let the battle begin!"
+
 @app.route("/", methods=['POST'])
 def move():
     request.get_data()

@@ -18,6 +18,7 @@ package hello
 
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
+import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.Post
 import io.micronaut.runtime.Micronaut
 import io.reactivex.Single
@@ -38,6 +39,11 @@ data class ArenaUpdate(val _links: Links, val arena: Arena)
 
 @Controller
 class WebApp {
+
+    @Get
+    fun index() = run {
+        "Let the battle begin!"
+    }
 
     @Post(uris = ["/", "/{+path}"])
     fun index(@Body maybeArenaUpdate: Single<ArenaUpdate>): Single<String> {

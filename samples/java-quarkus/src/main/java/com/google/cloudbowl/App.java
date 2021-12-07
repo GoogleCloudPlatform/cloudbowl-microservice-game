@@ -36,6 +36,11 @@ public class App {
         public Arena arena;
     }
 
+    @GET
+    public String index() {
+        return "Let the battle begin!";
+    }
+
     @POST
     @Produces(MediaType.TEXT_PLAIN)
     @Consumes(MediaType.APPLICATION_JSON)

@@ -2,6 +2,7 @@ package com.google.cloudbowl
 
 import java.util.Random
 import javax.ws.rs.Consumes
+import javax.ws.rs.GET
 import javax.ws.rs.POST
 import javax.ws.rs.Path
 import javax.ws.rs.Produces
@@ -18,6 +19,11 @@ class App {
     data class Arena(val dims: List<Int>, val state: Map<String, PlayerState>)
 
     data class ArenaUpdate(val _links: Links, val arena: Arena)
+
+    @GET
+    fun index(): String {
+        return "Let the battle begin!"
+    }
 
     @POST
     @Produces(MediaType.TEXT_PLAIN)

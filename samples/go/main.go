@@ -22,9 +22,8 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		fmt.Fprint(w, "only POST method supported")
+	if req.Method == http.MethodGet {
+		fmt.Fprint(w, "Let the battle begin!")
 		return
 	}
 
