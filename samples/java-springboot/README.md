@@ -16,4 +16,3 @@ export PROJECT_ID=YOUR_GCP_PROJECT_ID
 pack build --builder=gcr.io/buildpacks/builder gcr.io/$PROJECT_ID/cloudbowl-samples-java-springboot
 docker run -it -ePORT=8080 -p8080:8080 gcr.io/$PROJECT_ID/cloudbowl-samples-java-springboot
 ```
-
