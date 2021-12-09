@@ -6,7 +6,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
   GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  GKE_REGION: ${{ secrets.GKE_REGION }}
   SAMPLE: ${{ secrets.SAMPLE }}
   REPO_NAME: ${{ github.event.repository.name }}
   COMMIT_SHA: ${{ github.sha }}
@@ -28,7 +28,7 @@ jobs:
 
     - run: |-
         gcloud auth configure-docker -q
-        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --region "$GKE_REGION"
 
     - uses: buildpacks/github-actions/setup-pack@v4.1.0
 
