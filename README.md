@@ -31,6 +31,7 @@ Run Locally:
     ARENA/create
     ARENA/unlist
     ARENA/playerjoin
+    ARENA/playerfill/NUM
     ARENA/playerleave/ID
     ARENA/viewerjoin
     ARENA/scoresreset
