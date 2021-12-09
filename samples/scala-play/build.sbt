@@ -6,10 +6,10 @@ Compile / scalaSource := baseDirectory.value / "app"
 
 Compile / resourceDirectory := baseDirectory.value / "app"
 
-scalaVersion := "2.13.5"
+scalaVersion := "2.13.7"
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.8",
+  "com.typesafe.play" %% "play-akka-http-server" % "2.8.11",
   "org.slf4j" % "slf4j-simple" % "1.7.21"
 )
 

@@ -9,8 +9,8 @@ spec:
   partitions: 10
   replicas: 2
   config:
-      retention.ms: -1
-      retention.bytes: -1
+    retention.ms: -1
+    retention.bytes: -1
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
@@ -23,11 +23,8 @@ spec:
   partitions: 10
   replicas: 2
   config:
-      retention.ms: -1
-      retention.bytes: -1
-      cleanup.policy: compact
-      delete.retention.ms: 100
-      segment.ms: 100
+    retention.ms: -1
+    retention.bytes: -1
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
@@ -39,6 +36,8 @@ metadata:
 spec:
   partitions: 10
   replicas: 2
+  config:
+    retention.ms: 60000
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
@@ -50,6 +49,8 @@ metadata:
 spec:
   partitions: 10
   replicas: 2
+  config:
+    retention.ms: 60000
 ---
 apiVersion: kafka.strimzi.io/v1beta1
 kind: KafkaTopic
@@ -61,6 +62,8 @@ metadata:
 spec:
   partitions: 10
   replicas: 2
+  config:
+    retention.ms: 60000
 ---
 apiVersion: apps/v1
 kind: Deployment

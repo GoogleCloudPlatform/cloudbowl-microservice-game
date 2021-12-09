@@ -5,7 +5,7 @@ enablePlugins(PlayScala, AutomateHeaderPlugin)
 
 name := "cloudbowl"
 
-scalaVersion := "2.13.6"
+scalaVersion := "2.13.7"
 
 libraryDependencies ++= Seq(
   guice                                                                    ,
@@ -15,7 +15,7 @@ libraryDependencies ++= Seq(
   "org.webjars"            %% "webjars-play"               % "2.8.0-1"     ,
   "org.webjars"            %  "bootstrap"                  % "4.6.0-1"     ,
 
-  "com.typesafe.akka"      %% "akka-stream-kafka"          % "2.0.7"       ,
+  "com.typesafe.akka"      %% "akka-stream-kafka"          % "2.1.1"       ,
   "com.lihaoyi"            %% "upickle"                    % "1.3.6"       ,
 
   "com.pauldijou"          %% "jwt-core"                   % "5.0.0"       ,

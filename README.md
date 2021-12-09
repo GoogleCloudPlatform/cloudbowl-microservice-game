@@ -29,6 +29,7 @@ Run Locally:
     You can send commands like
     ```
     ARENA/create
+    ARENA/unlist
     ARENA/playerjoin
     ARENA/playerleave/ID
     ARENA/viewerjoin

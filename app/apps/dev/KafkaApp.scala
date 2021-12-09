@@ -118,6 +118,10 @@ object KafkaProducerApp extends App {
     if (line.nonEmpty) {
       line.split("/") match {
         case Array(arena, "create") =>
+          val arenaConfig = ArenaConfig(arena, arena, "2728", Some(new URL("https://github.com/cloudbowl/arenas")), listed = true)
+          send(Topics.arenaConfig, arena, arenaConfig)
+
+        case Array(arena, "unlist") =>
           val arenaConfig = ArenaConfig(arena, arena, "2728", Some(new URL("https://github.com/cloudbowl/arenas")))
           send(Topics.arenaConfig, arena, arenaConfig)
 

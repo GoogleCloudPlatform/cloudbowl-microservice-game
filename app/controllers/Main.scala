@@ -174,7 +174,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       query.playerUpdateActorRef.ask(arena)(Timeout(10.seconds)).mapTo[Set[Player]].map { players =>
         val floodInterval = arenaConfig.map(_.floodInterval).getOrElse(Duration.Zero)
         val badInterval = arenaConfig.map(_.badInterval).getOrElse(Duration.Zero)
-        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), arenaConfig.forall(_.joinable), floodInterval, badInterval, players))
+        Ok(adminTemplate(arena, maybeAdminPassword.isDefined, None, None, arenaConfig.map(_.name), arenaConfig.map(_.emojiCode), None, arenaConfig.flatMap(_.instructions), arenaConfig.forall(_.joinable), arenaConfig.forall(_.listed), floodInterval, badInterval, players))
       }
     }
   }
@@ -187,6 +187,7 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
       Try(new URL(url)).toOption
     }
     val joinable = request.body.get("joinable").flatMap(_.headOption).isDefined
+    val listed = request.body.get("listed").flatMap(_.headOption).isDefined
 
     val floodInterval = request.body.get("floodIntervalMinutes").flatMap(_.headOption).flatMap(_.toIntOption).map(FiniteDuration(_, TimeUnit.MINUTES)).getOrElse(Duration.Zero)
     val badInterval = request.body.get("badIntervalMinutes").flatMap(_.headOption).flatMap(_.toIntOption).map(FiniteDuration(_, TimeUnit.MINUTES)).getOrElse(Duration.Zero)
@@ -211,14 +212,14 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
     emojiInvalidFuture.map { emojiInvalid =>
       (maybeName, maybeEmoji, emojiInvalid, adminPasswordInvalid, maybeInstructions) match {
         case (Some(name), Some(emoji), None, None, instructions) =>
-          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions, joinable, floodInterval, badInterval)
+          val arenaConfig = ArenaConfig(arena, name, emoji.toLowerCase, instructions, joinable, floodInterval, badInterval, listed)
           val record = new ProducerRecord[Arena.Path, ArenaConfig](Arena.KafkaConfig.Topics.arenaConfig, arena, arenaConfig)
           Source.single(record).to(arenaConfigSink).run()
           // todo: when there are no players, the arena does not load
           Redirect(controllers.routes.Main.watch(arena))
 
         case _ =>
-          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, floodInterval, badInterval, Set.empty))
+          Ok(adminTemplate(arena, maybeAdminPassword.isDefined, maybeAdminPassword, adminPasswordInvalid, maybeName, maybeEmoji, emojiInvalid, maybeInstructions, joinable, listed, floodInterval, badInterval, Set.empty))
       }
     }
   }
@@ -252,8 +253,6 @@ class Main @Inject()(query: Query, summaries: Summaries, wsClient: WSClient, con
 @Singleton
 class Query @Inject()(implicit actorSystem: ActorSystem) {
 
-  private val groupId = UUID.randomUUID().toString
-
   class PlayerUpdateActor extends Actor {
     val allPlayers = scala.collection.mutable.Map.empty[Arena.Path, Set[Player]]
 
@@ -266,7 +265,6 @@ class Query @Inject()(implicit actorSystem: ActorSystem) {
   }
 
   val playerUpdateActorRef: ActorRef = actorSystem.actorOf(Props(new PlayerUpdateActor))
-  private val playerUpdate = apps.Sources.playerUpdate(groupId).to(Sink.actorRef(playerUpdateActorRef, Kill, _ => Kill)).run()
 
   class ArenaConfigActor extends Actor {
     val arenaConfigs = scala.collection.mutable.Map.empty[Arena.Path, ArenaConfig]
@@ -275,15 +273,20 @@ class Query @Inject()(implicit actorSystem: ActorSystem) {
       case PathedArenaConfig(path, arenaConfig) =>
         arenaConfigs.update(path, arenaConfig)
       case Query.ArenaConfigs =>
-        sender() ! arenaConfigs.toMap
+        val listed = arenaConfigs.filter(_._2.listed)
+        sender() ! listed.toMap
       case path: Arena.Path =>
         sender() ! arenaConfigs.get(path)
     }
   }
 
   val arenaConfigActorRef: ActorRef = actorSystem.actorOf(Props(new ArenaConfigActor))
-  private val arenaConfig = apps.Sources.arenaConfig(groupId).to(Sink.actorRef(arenaConfigActorRef, Kill, _ => Kill)).run()
 
+
+  // todo: kicks off the initial load on startup (bad)
+  private val groupId = UUID.randomUUID().toString
+  apps.Sources.playerUpdate(groupId).to(Sink.actorRef(playerUpdateActorRef, Kill, _ => Kill)).run()
+  apps.Sources.arenaConfig(groupId).to(Sink.actorRef(arenaConfigActorRef, Kill, _ => Kill)).run()
 }
 
 object Query {
@@ -301,9 +304,19 @@ class Summaries @Inject()(query: Query)(implicit actorSystem: ActorSystem) {
 
   val _source: Source[Map[Arena.Path, Summary], NotUsed] = {
     Arena.KafkaConfig.SinksAndSources.arenaUpdateSource(groupId).conflateWithSeed { record =>
-      Map(record.key() -> arenaUpdateToSummary(record.value()))
+      if (record.value().arenaState.config.listed) {
+        Map(record.key() -> arenaUpdateToSummary(record.value()))
+      }
+      else {
+        Map.empty[Arena.Path, Summary]
+      }
     } { case (summaries, record) =>
-      summaries.updated(record.key(), arenaUpdateToSummary(record.value()))
+      if (record.value().arenaState.config.listed) {
+        summaries.updated(record.key(), arenaUpdateToSummary(record.value()))
+      }
+      else {
+        summaries.removed(record.key())
+      }
     }.throttle(1, 1.second).buffer(2, OverflowStrategy.dropTail).toMat(BroadcastHub.sink(bufferSize = 2))(Keep.right).run()
   }
 
