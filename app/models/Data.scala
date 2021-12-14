@@ -467,7 +467,7 @@ object Player {
       if (name.length > 64) {
         Left("Name must be less than 65 characters")
       }
-      else if ("[^a-zA-Z0-9\\s]".r.findFirstIn(name).isDefined) {
+      else if ("[^\\p{L}0-9\\s]".r.findFirstIn(name).isDefined) {
         Left("Name must only contain letters, numbers, and spaces")
       }
       else if (profanity.matches(name)) {
