@@ -221,6 +221,18 @@ class DataSpec extends AnyWordSpec with Matchers with EitherValues with BeforeAn
 
       result must equal (Right(Player(service.get.toString, name.get, new URL("https://avatars.githubusercontent.com/GoogleCloudPlatform"))))
     }
+    "pass for non-US username" in {
+      val names = List(Some("Zażółć gęślą jaźń"), Some("Příliš žluťoučký kůň úpěl ďábelské ódy"), Some("Ζαφείρι δέξου πάγκαλο βαθῶν ψυχῆς τὸ σῆμα"))
+      val githubUser = Some("GoogleCloudPlatform")
+      val service = Some(new URL("https://zxcv.com"))
+      val fetchPlayers = Future.successful(Set.empty[Player])
+      def validateGithubUser(url: String) = Future.successful(None)
+      def validateService(url: URL) = Future.successful(None)
+
+      val results = names.map { name => await(Player.validate(name, service, githubUser)(neverProfane, avatarBase)(fetchPlayers)(validateGithubUser)(validateService)) }
+
+      names.lazyZip(results).foreach { (name, result) => result must equal (Right(Player(service.get.toString, name.get, new URL("https://avatars.githubusercontent.com/GoogleCloudPlatform")))) }
+    }
     "fail when the name is invalid" in {
       val githubUser = Some("GoogleCloudPlatform")
       val service = Some(new URL("https://zxcv.com"))
