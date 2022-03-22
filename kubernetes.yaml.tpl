@@ -72,7 +72,7 @@ metadata:
     app: cloudbowl-battle
   name: cloudbowl-battle
 spec:
-  replicas: 5
+  replicas: 1
   selector:
     matchLabels:
       app: cloudbowl-battle
@@ -102,7 +102,7 @@ spec:
     metadata:
       name: cloudbowl-web-$COMMIT_SHA
       annotations:
-        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "10"
     spec:
       containers:
