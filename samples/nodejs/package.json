@@ -9,6 +9,6 @@
     "start": "node web.js"
   },
   "engines": {
-    "node": "12.11.0"
+    "node": "17.2.0"
   }
 }
