@@ -38,4 +38,4 @@ steps:
   - 'CLOUDSDK_CONTAINER_CLUSTER=${_CLOUDSDK_CONTAINER_CLUSTER}'
 
 options:
-  machineType: 'N2_HIGHCPU_8'
+  machineType: 'N1_HIGHCPU_8'
